@@ -1,0 +1,34 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1769450736551,
+      "tag": "0000_sleepy_raza",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1769519609237,
+      "tag": "0001_acoustic_piledriver",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1769525526243,
+      "tag": "0002_brave_skin",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1769863738024,
+      "tag": "0003_moaning_kronos",
+      "breakpoints": true
+    }
+  ]
+}

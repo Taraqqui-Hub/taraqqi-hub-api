@@ -1,0 +1,38 @@
+{
+    "compilerOptions": {
+        "module": "ESNext",
+        "moduleResolution": "Bundler",
+        "target": "ESNext",
+        "sourceMap": true,
+        "lib": [
+            "es6",
+            "dom"
+        ],
+        "rootDir": ".",
+        "typeRoots": [
+            "./types",
+            "./node_modules/@types"
+        ],
+        "noEmit": true,
+        "allowImportingTsExtensions": true,
+        "resolveJsonModule": true,
+        "allowJs": false,
+        "esModuleInterop": true,
+        "forceConsistentCasingInFileNames": true,
+        "strict": true,
+        "noUncheckedIndexedAccess": false,
+        "noImplicitAny": false,
+        "skipLibCheck": true
+    },
+    "ts-node": {
+        "esm": true
+    },
+    "include": [
+        "src/**/*",
+        "types/**/*"
+    ],
+    "exclude": [
+        "node_modules",
+        "dist"
+    ]
+}
