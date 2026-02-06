@@ -28,7 +28,8 @@ export const userTypesEnum = pgEnum("user_types", [
 
 // Verification status enum
 export enum VerificationStatuses {
-	DRAFT = "draft", // Registration incomplete
+	DRAFT = "draft", // Registration incomplete (employer: before payment)
+	PAYMENT_VERIFIED = "payment_verified", // Employer paid onboarding fee; can complete profile & KYC
 	SUBMITTED = "submitted", // KYC submitted, awaiting review
 	UNDER_REVIEW = "under_review", // Admin reviewing
 	VERIFIED = "verified", // Full access
@@ -38,6 +39,7 @@ export enum VerificationStatuses {
 
 export const verificationStatusEnum = pgEnum("verification_status", [
 	"draft",
+	"payment_verified",
 	"submitted",
 	"under_review",
 	"verified",

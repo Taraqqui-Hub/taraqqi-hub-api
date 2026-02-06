@@ -237,6 +237,16 @@ export {
 } from "./schema/transactions.ts";
 export type { Transaction, NewTransaction } from "./schema/transactions.ts";
 
+// Employer Registration Payments (OLX-style one-time onboarding fee)
+export {
+	employerRegistrationPayments,
+	employerPaymentStatusEnum,
+} from "./schema/employerRegistrationPayments.ts";
+export type {
+	EmployerRegistrationPayment,
+	NewEmployerRegistrationPayment,
+} from "./schema/employerRegistrationPayments.ts";
+
 // ============================================
 // System Tables
 // ============================================

@@ -8,7 +8,7 @@ import { StatusCodes } from "http-status-codes";
 import { eq } from "drizzle-orm";
 
 import { db } from "../config/database.ts";
-import { users, jobseekerProfiles, employerProfiles } from "../db/index.ts";
+import { users, jobseekerProfiles, employerProfiles, userPreferences } from "../db/index.ts";
 import authMiddleware from "../middleware/authMiddleware.ts";
 import expressAsyncHandler from "../utils/expressAsyncHandler.ts";
 import { z } from "zod";
@@ -65,6 +65,14 @@ meRouter.get(
 		// Get verification status info (for redirect messages)
 		const verificationInfo = await getUserVerificationStatus(userId);
 
+		// Check if user has set preferences
+		const [preferencesRecord] = await db
+			.select({ id: userPreferences.id })
+			.from(userPreferences)
+			.where(eq(userPreferences.userId, userId))
+			.limit(1);
+		const hasPreferences = !!preferencesRecord;
+
 		// Get profile completion status
 		let profileComplete = false;
 		let profileCompletionPercentage = 0;
@@ -114,6 +122,7 @@ meRouter.get(
 				lastLoginAt: user.lastLoginAt,
 				profileComplete,
 				profileCompletionPercentage,
+				hasPreferences,
 			},
 			verification: verificationInfo,
 			roles: roles.map((r) => r.name),

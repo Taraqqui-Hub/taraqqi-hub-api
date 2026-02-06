@@ -15,7 +15,9 @@ import {
 	jobs,
 	JobStatuses,
 	jobseekerProfiles,
+	users,
 } from "../db/index.ts";
+import { VerificationStatuses } from "../db/index.ts";
 import { HTTPError } from "../config/error.ts";
 import authMiddleware from "../middleware/authMiddleware.ts";
 import { requirePermission } from "../middleware/rbacMiddleware.ts";
@@ -165,6 +167,9 @@ router.post(
 					title: jobs.title,
 					status: jobs.status,
 					employerId: jobs.employerId,
+					maxApplications: jobs.maxApplications,
+					applicationsCount: jobs.applicationsCount,
+					autoCloseOnLimit: jobs.autoCloseOnLimit,
 				})
 				.from(jobs)
 				.where(
@@ -183,6 +188,53 @@ router.post(
 				throw new HTTPError({
 					httpStatus: StatusCodes.BAD_REQUEST,
 					message: "This job is no longer accepting applications",
+				});
+			}
+
+			const [currentUser] = await db
+				.select({
+					verificationStatus: users.verificationStatus,
+				})
+				.from(users)
+				.where(eq(users.id, userId))
+				.limit(1);
+			if (currentUser?.verificationStatus !== VerificationStatuses.VERIFIED) {
+				throw new HTTPError({
+					httpStatus: StatusCodes.FORBIDDEN,
+					message: "Complete your profile and KYC verification to apply for jobs",
+				});
+			}
+
+			const [jsProfile] = await db
+				.select({
+					id: jobseekerProfiles.id,
+					profileCompletion: jobseekerProfiles.profileCompletion,
+				})
+				.from(jobseekerProfiles)
+				.where(eq(jobseekerProfiles.userId, userId))
+				.limit(1);
+			if (!jsProfile) {
+				throw new HTTPError({
+					httpStatus: StatusCodes.BAD_REQUEST,
+					message: "Complete your profile before applying",
+				});
+			}
+			const completion = jsProfile.profileCompletion ?? 0;
+			if (completion < 80) {
+				throw new HTTPError({
+					httpStatus: StatusCodes.BAD_REQUEST,
+					message: `Profile must be at least 80% complete to apply (current: ${completion}%)`,
+				});
+			}
+
+			if (
+				job.maxApplications != null &&
+				job.applicationsCount != null &&
+				job.applicationsCount >= job.maxApplications
+			) {
+				throw new HTTPError({
+					httpStatus: StatusCodes.BAD_REQUEST,
+					message: "This job has reached the maximum number of applications",
 				});
 			}
 
@@ -236,6 +288,20 @@ router.post(
 					status: ApplicationStatuses.PENDING,
 				})
 				.returning();
+
+			const newCount = (job.applicationsCount ?? 0) + 1;
+			await db
+				.update(jobs)
+				.set({
+					applicationsCount: newCount,
+					updatedAt: new Date(),
+					...(job.maxApplications != null &&
+						job.autoCloseOnLimit !== false &&
+						newCount >= job.maxApplications && {
+							status: JobStatuses.CLOSED,
+						}),
+				})
+				.where(eq(jobs.id, job.id));
 
 			// Audit log
 			await auditCreate(

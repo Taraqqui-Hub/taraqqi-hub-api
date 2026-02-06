@@ -15,6 +15,8 @@ import { HTTPError } from "../config/error.ts";
 const STATUS_MESSAGES: Record<string, string> = {
 	[VerificationStatuses.DRAFT]:
 		"Please complete your profile and submit KYC documents to access this feature.",
+	[VerificationStatuses.PAYMENT_VERIFIED]:
+		"Please complete your company profile and business verification.",
 	[VerificationStatuses.SUBMITTED]:
 		"Your documents are being reviewed. This typically takes 1-3 business days.",
 	[VerificationStatuses.UNDER_REVIEW]:
@@ -28,11 +30,50 @@ const STATUS_MESSAGES: Record<string, string> = {
 // Redirect paths for each status
 const STATUS_REDIRECTS: Record<string, string> = {
 	[VerificationStatuses.DRAFT]: "/complete-registration",
+	[VerificationStatuses.PAYMENT_VERIFIED]: "/employer/register/company",
 	[VerificationStatuses.SUBMITTED]: "/verification-pending",
 	[VerificationStatuses.UNDER_REVIEW]: "/verification-pending",
 	[VerificationStatuses.REJECTED]: "/verification-rejected",
 	[VerificationStatuses.SUSPENDED]: "/account-suspended",
 };
+
+/**
+ * Allow employer with PAYMENT_VERIFIED or VERIFIED (for company profile & KYC steps)
+ */
+export function requireEmployerPaymentVerifiedOrVerified() {
+	return async (req: Request, res: Response, next: NextFunction) => {
+		const userId = req.userId;
+		if (!userId) {
+			return res.status(StatusCodes.UNAUTHORIZED).json({
+				error: "Authentication required",
+			});
+		}
+		const [user] = await db
+			.select({
+				userType: users.userType,
+				verificationStatus: users.verificationStatus,
+			})
+			.from(users)
+			.where(eq(users.id, userId))
+			.limit(1);
+		if (!user || user.userType !== "employer") {
+			return res.status(StatusCodes.FORBIDDEN).json({
+				error: "Employer account required",
+			});
+		}
+		if (
+			user.verificationStatus !== VerificationStatuses.PAYMENT_VERIFIED &&
+			user.verificationStatus !== VerificationStatuses.VERIFIED
+		) {
+			return res.status(StatusCodes.FORBIDDEN).json({
+				error: "Complete registration payment first",
+				code: "PAYMENT_REQUIRED",
+				redirectTo: "/employer/register/payment",
+			});
+		}
+		next();
+	};
+}
 
 /**
  * Middleware to require verified users only

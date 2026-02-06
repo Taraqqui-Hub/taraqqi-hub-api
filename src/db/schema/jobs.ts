@@ -93,6 +93,7 @@ export const jobs = pgTable(
 		title: text("title").notNull(),
 		slug: text("slug").notNull(),
 		description: text("description").notNull(),
+		roleSummary: text("role_summary"),
 		requirements: text("requirements"),
 		responsibilities: text("responsibilities"),
 
@@ -104,7 +105,10 @@ export const jobs = pgTable(
 
 		// Location
 		locationType: locationTypeEnum("location_type"),
+		pincode: text("pincode"),
 		city: text("city"),
+		district: text("district"),
+		area: text("area"),
 		state: text("state"),
 		country: text("country").default("India"),
 		address: text("address"),
@@ -112,20 +116,35 @@ export const jobs = pgTable(
 		// Compensation
 		salaryMin: decimal("salary_min", { precision: 12, scale: 2 }),
 		salaryMax: decimal("salary_max", { precision: 12, scale: 2 }),
+		salaryType: text("salary_type").default("yearly"),
 		salaryCurrency: text("salary_currency").default("INR"),
 		isSalaryNegotiable: boolean("is_salary_negotiable").notNull().default(false),
 		hideSalary: boolean("hide_salary").notNull().default(false),
+		benefits: text("benefits").array(),
 
 		// Requirements
 		minExperienceYears: integer("min_experience_years").notNull().default(0),
 		maxExperienceYears: integer("max_experience_years"),
 		educationRequired: text("education_required"),
 
+		// Hiring preferences (optional)
+		preferredLanguage: text("preferred_language"),
+		freshersAllowed: boolean("freshers_allowed"),
+		ageMin: integer("age_min"),
+		ageMax: integer("age_max"),
+		genderPreference: text("gender_preference"),
+
 		// Settings
 		status: jobStatusEnum("status").notNull().default(JobStatuses.DRAFT),
 		isFeatured: boolean("is_featured").notNull().default(false),
+		promotionType: text("promotion_type"), // featured | city_boost | extended_duration | highlight
+		promotedAt: timestamp("promoted_at", { mode: "date" }),
+		promotedUntil: timestamp("promoted_until", { mode: "date" }),
+		listingDurationDays: integer("listing_duration_days").notNull().default(15),
+		isUrgentHighlight: boolean("is_urgent_highlight").notNull().default(false),
 		applicationDeadline: timestamp("application_deadline", { mode: "date" }),
 		maxApplications: integer("max_applications"),
+		autoCloseOnLimit: boolean("auto_close_on_limit").notNull().default(false),
 
 		// Stats
 		viewsCount: integer("views_count").notNull().default(0),

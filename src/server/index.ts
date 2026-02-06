@@ -1,3 +1,9 @@
+// BigInt JSON serialization polyfill - must be first
+// This allows JSON.stringify to handle BigInt values from PostgreSQL
+(BigInt.prototype as any).toJSON = function () {
+	return this.toString();
+};
+
 import "../config/loadEnv.ts";
 
 import Server from "./server.ts";
@@ -16,6 +22,10 @@ import walletRouter from "../routes/wallet.ts";
 import uploadRouter from "../routes/upload.ts";
 import educationRouter from "../routes/education.ts";
 import preferencesRouter from "../routes/preferences.ts";
+import experienceRouter from "../routes/experience.ts";
+import skillsRouter from "../routes/skills.ts";
+import interestsRouter from "../routes/interests.ts";
+import profileWizardRouter from "../routes/profileWizard.ts";
 
 // Admin routes
 import adminDashboardRouter from "../routes/admin/dashboard.ts";
@@ -59,6 +69,22 @@ new Server({
 		{
 			path: "/profile/jobseeker/education",
 			handlers: [educationRouter],
+		},
+		{
+			path: "/profile/jobseeker/experience",
+			handlers: [experienceRouter],
+		},
+		{
+			path: "/profile/jobseeker/skills",
+			handlers: [skillsRouter],
+		},
+		{
+			path: "/profile/jobseeker/interests",
+			handlers: [interestsRouter],
+		},
+		{
+			path: "/profile/wizard",
+			handlers: [profileWizardRouter],
 		},
 		{
 			path: "/preferences",

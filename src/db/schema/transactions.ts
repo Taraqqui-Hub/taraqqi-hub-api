@@ -41,7 +41,9 @@ export const transactionStatusEnum = pgEnum("transaction_status", [
 export enum TransactionCategories {
 	DEPOSIT = "deposit",
 	WITHDRAWAL = "withdrawal",
+	REGISTRATION_FEE = "registration_fee",
 	JOB_POST_FEE = "job_post_fee",
+	JOB_PROMOTION = "job_promotion",
 	FEATURED_JOB_FEE = "featured_job_fee",
 	RESUME_UNLOCK = "resume_unlock",
 	REFUND = "refund",
@@ -52,7 +54,9 @@ export enum TransactionCategories {
 export const transactionCategoryEnum = pgEnum("transaction_category", [
 	"deposit",
 	"withdrawal",
+	"registration_fee",
 	"job_post_fee",
+	"job_promotion",
 	"featured_job_fee",
 	"resume_unlock",
 	"refund",

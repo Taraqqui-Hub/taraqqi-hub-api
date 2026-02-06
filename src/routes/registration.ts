@@ -6,7 +6,7 @@
 import { Router } from "express";
 import { StatusCodes } from "http-status-codes";
 import { z } from "zod";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, isNull, desc } from "drizzle-orm";
 
 import { db } from "../config/database.ts";
 import {
@@ -14,6 +14,7 @@ import {
 	jobseekerProfiles,
 	employerProfiles,
 	kycRecords,
+	employerRegistrationPayments,
 	VerificationStatuses,
 	KycStatuses,
 	KycDocumentTypes,
@@ -21,7 +22,10 @@ import {
 } from "../db/index.ts";
 import { HTTPError } from "../config/error.ts";
 import authMiddleware from "../middleware/authMiddleware.ts";
-import { requireEmailVerified } from "../middleware/verificationMiddleware.ts";
+import {
+	requireEmailVerified,
+	requireEmployerPaymentVerifiedOrVerified,
+} from "../middleware/verificationMiddleware.ts";
 import expressAsyncHandler from "../utils/expressAsyncHandler.ts";
 import { auditCreate, auditUpdate } from "../services/auditService.ts";
 import { sendEmail } from "../services/notificationService.ts";
@@ -47,24 +51,37 @@ const jobseekerProfileSchema = z.object({
 	expectedSalary: z.string().optional(),
 });
 
-// Employer Profile Schema
+// Employer Profile Schema (post-payment company details)
 const employerProfileSchema = z.object({
-	companyName: z.string().min(2, "Company name is required"),
+	companyName: z.string().min(2, "Company legal name is required"),
+	brandName: z.string().optional(),
 	industry: z.string().min(1, "Industry is required"),
-	companyType: z.enum(["startup", "sme", "enterprise", "agency"]).optional(),
-	companySize: z.enum(["1-10", "11-50", "51-200", "201-500", "500+"]).optional(),
-	website: z.string().url().optional(),
+	companyType: z.union([
+		z.enum(["startup", "sme", "enterprise", "agency"]),
+		z.literal(""),
+		z.null(),
+		z.undefined()
+	]).optional(),
+	companySize: z.union([
+		z.enum(["1-10", "11-50", "51-200", "201-500", "500+"]),
+		z.literal(""),
+		z.null(),
+		z.undefined()
+	]).optional(),
+	website: z.union([z.string().url(), z.literal(""), z.null(), z.undefined()]).optional(),
 	contactPersonName: z.string().min(2, "Contact person name is required"),
-	contactEmail: z.string().email().optional(),
+	contactEmail: z.union([z.string().email(), z.literal(""), z.null(), z.undefined()]).optional(),
 	contactPhone: z.string().optional(),
-	address: z.string().min(1, "Address is required"),
+	recruiterPhone: z.string().optional(),
+	whatsappNumber: z.string().optional(),
+	address: z.string().optional(),
 	city: z.string().min(1, "City is required"),
 	state: z.string().min(1, "State is required"),
 	pincode: z.string().optional(),
 	description: z.string().max(2000).optional(),
 });
 
-// KYC Document Schema
+// KYC Document Schema (employer: gst_certificate, msme_shop_act, cin, authorized_id)
 const kycDocumentSchema = z.object({
 	documentType: z.enum([
 		"aadhaar",
@@ -73,6 +90,7 @@ const kycDocumentSchema = z.object({
 		"driving_license",
 		"voter_id",
 		"gst_certificate",
+		"msme_shop_act",
 		"cin",
 		"authorized_id",
 	]),
@@ -102,58 +120,235 @@ async function getRegistrationStep(userId: bigint, userType: string) {
 
 	if (!user) return { step: 0, message: "User not found" };
 
-	// Step 1: Email verification
+	// Employer flow: 1=email (optional), 2=pay, 3=company profile, 4=KYC, 5=pending, 6=verified
+	if (userType === UserTypes.EMPLOYER) {
+		if (!user.emailVerified) {
+			return { step: 1, message: "Please verify your email address" };
+		}
+		if (user.verificationStatus === VerificationStatuses.DRAFT) {
+			return { step: 2, message: "Please pay the one-time onboarding fee" };
+		}
+		if (user.verificationStatus === VerificationStatuses.PAYMENT_VERIFIED) {
+			const [profile] = await db
+				.select({ id: employerProfiles.id })
+				.from(employerProfiles)
+				.where(eq(employerProfiles.userId, userId))
+				.limit(1);
+			if (!profile) {
+				return { step: 3, message: "Please complete your company profile" };
+			}
+			return { step: 4, message: "Please submit business verification documents" };
+		}
+		if (
+			user.verificationStatus === VerificationStatuses.SUBMITTED ||
+			user.verificationStatus === VerificationStatuses.UNDER_REVIEW
+		) {
+			return { step: 5, message: "Your documents are being reviewed" };
+		}
+		if (user.verificationStatus === VerificationStatuses.VERIFIED) {
+			return { step: 6, message: "Registration complete" };
+		}
+		if (user.verificationStatus === VerificationStatuses.REJECTED) {
+			return { step: 4, message: "Please resubmit verification documents" };
+		}
+		return { step: 4, message: "Action required" };
+	}
+
+	// Individual flow
 	if (!user.emailVerified) {
 		return { step: 1, message: "Please verify your email address" };
 	}
-
-	// Step 2: Profile completion
-	if (userType === UserTypes.INDIVIDUAL) {
-		const [profile] = await db
-			.select({ id: jobseekerProfiles.id })
-			.from(jobseekerProfiles)
-			.where(eq(jobseekerProfiles.userId, userId))
-			.limit(1);
-
-		if (!profile) {
-			return { step: 2, message: "Please complete your profile" };
-		}
-	} else if (userType === UserTypes.EMPLOYER) {
-		const [profile] = await db
-			.select({ id: employerProfiles.id })
-			.from(employerProfiles)
-			.where(eq(employerProfiles.userId, userId))
-			.limit(1);
-
-		if (!profile) {
-			return { step: 2, message: "Please add your company details" };
-		}
+	const [profile] = await db
+		.select({ id: jobseekerProfiles.id })
+		.from(jobseekerProfiles)
+		.where(eq(jobseekerProfiles.userId, userId))
+		.limit(1);
+	if (!profile) {
+		return { step: 2, message: "Please complete your profile" };
 	}
-
-	// Step 3: KYC submission
 	if (user.verificationStatus === VerificationStatuses.DRAFT) {
 		return { step: 3, message: "Please submit verification documents" };
 	}
-
-	// Step 4: Waiting for approval
 	if (
 		user.verificationStatus === VerificationStatuses.SUBMITTED ||
 		user.verificationStatus === VerificationStatuses.UNDER_REVIEW
 	) {
 		return { step: 4, message: "Your documents are being reviewed" };
 	}
-
-	// Completed
 	if (user.verificationStatus === VerificationStatuses.VERIFIED) {
 		return { step: 5, message: "Registration complete" };
 	}
-
 	return { step: 3, message: "Action required" };
 }
 
 // ============================================
 // Routes
 // ============================================
+
+// Registration fee in paise (e.g. 99900 = ₹999)
+const EMPLOYER_REGISTRATION_FEE_PAISE = BigInt(
+	process.env.EMPLOYER_REGISTRATION_FEE_PAISE || "99900"
+);
+
+/**
+ * GET /registration/employer/payment-info
+ * What the employer pays and what it unlocks (no auth required for display)
+ */
+router.get(
+	"/employer/payment-info",
+	expressAsyncHandler(async (_req, res) => {
+		const amountRupees = Number(EMPLOYER_REGISTRATION_FEE_PAISE) / 100;
+		return res.status(StatusCodes.OK).json({
+			amountPaise: EMPLOYER_REGISTRATION_FEE_PAISE.toString(),
+			amountRupees,
+			currency: "INR",
+			oneTime: true,
+			whatsIncluded: [
+				"Company profile creation",
+				"Job posting access",
+				"Viewing applicants",
+				"Profile views",
+				"Basic support",
+			],
+		});
+	})
+);
+
+/**
+ * GET /registration/employer/my-payment
+ * Get current employer's registration payment (for billing page)
+ */
+router.get(
+	"/employer/my-payment",
+	authMiddleware([UserTypes.EMPLOYER]),
+	expressAsyncHandler(async (req, res) => {
+		const userId = req.userId!;
+
+		const [payment] = await db
+			.select({
+				id: employerRegistrationPayments.id,
+				amountPaise: employerRegistrationPayments.amountPaise,
+				currency: employerRegistrationPayments.currency,
+				status: employerRegistrationPayments.status,
+				paidAt: employerRegistrationPayments.paidAt,
+			})
+			.from(employerRegistrationPayments)
+			.where(eq(employerRegistrationPayments.userId, userId))
+			.orderBy(desc(employerRegistrationPayments.paidAt))
+			.limit(1);
+
+		if (!payment) {
+			return res.status(StatusCodes.OK).json({ payment: null });
+		}
+
+		return res.status(StatusCodes.OK).json({
+			payment: {
+				...payment,
+				amountRupees: Number(payment.amountPaise) / 100,
+			},
+		});
+	})
+);
+
+/**
+ * POST /registration/employer/complete-payment
+ * Record registration payment and set status to PAYMENT_VERIFIED (MVP: simulate or use paymentReference)
+ */
+const completePaymentSchema = z.object({
+	paymentReference: z.string().optional(),
+	simulate: z.boolean().optional().default(false),
+});
+router.post(
+	"/employer/complete-payment",
+	authMiddleware([UserTypes.EMPLOYER]),
+	expressAsyncHandler(
+		async (data, req, res) => {
+			const userId = req.userId!;
+
+			const [user] = await db
+				.select({
+					id: users.id,
+					verificationStatus: users.verificationStatus,
+				})
+				.from(users)
+				.where(eq(users.id, userId))
+				.limit(1);
+
+			if (!user || user.verificationStatus !== VerificationStatuses.DRAFT) {
+				throw new HTTPError({
+					httpStatus: StatusCodes.BAD_REQUEST,
+					message:
+						user?.verificationStatus === VerificationStatuses.PAYMENT_VERIFIED
+							? "Registration fee already paid."
+							: "Only employers in draft status can complete payment.",
+				});
+			}
+
+			// Idempotency: already paid with this reference?
+			if (data.paymentReference) {
+				const [existing] = await db
+					.select({ id: employerRegistrationPayments.id })
+					.from(employerRegistrationPayments)
+					.where(eq(employerRegistrationPayments.userId, userId))
+					.limit(1);
+				if (existing) {
+					await db
+						.update(users)
+						.set({
+							verificationStatus: VerificationStatuses.PAYMENT_VERIFIED,
+							updatedAt: new Date(),
+						})
+						.where(eq(users.id, userId));
+					return res.status(StatusCodes.OK).json({
+						message: "Payment already recorded",
+						verificationStatus: VerificationStatuses.PAYMENT_VERIFIED,
+						nextStep: "/employer/register/company",
+					});
+				}
+			}
+
+			await db.transaction(async (tx) => {
+				await tx.insert(employerRegistrationPayments).values({
+					userId,
+					amountPaise: EMPLOYER_REGISTRATION_FEE_PAISE,
+					currency: "INR",
+					status: "completed",
+					paymentGatewayRef: data.paymentReference || null,
+					metadata: data.simulate ? JSON.stringify({ simulate: true }) : null,
+				});
+				await tx
+					.update(users)
+					.set({
+						verificationStatus: VerificationStatuses.PAYMENT_VERIFIED,
+						updatedAt: new Date(),
+					})
+					.where(eq(users.id, userId));
+			});
+
+			await auditCreate(
+				"employer_registration_payment",
+				userId,
+				{ amountPaise: EMPLOYER_REGISTRATION_FEE_PAISE.toString() },
+				{
+					userId,
+					ipAddress: req.clientIp,
+					userAgent: req.clientUserAgent,
+					requestId: req.requestId,
+				}
+			);
+
+			return res.status(StatusCodes.OK).json({
+				message: "Payment successful. You can now complete your company profile.",
+				verificationStatus: VerificationStatuses.PAYMENT_VERIFIED,
+				nextStep: "/employer/register/company",
+			});
+		},
+		{
+			validationSchema: completePaymentSchema,
+			getValue: (req) => req.body,
+		}
+	)
+);
 
 /**
  * GET /registration/status
@@ -284,12 +479,12 @@ router.post(
 
 /**
  * POST /registration/employer/company
- * Step 2: Add company details
+ * Step 4 (post-payment): Add company details
  */
 router.post(
 	"/employer/company",
 	authMiddleware([UserTypes.EMPLOYER]),
-	requireEmailVerified(),
+	requireEmployerPaymentVerifiedOrVerified(),
 	expressAsyncHandler(
 		async (data, req, res) => {
 			const userId = req.userId!;
@@ -301,6 +496,23 @@ router.post(
 				.where(eq(employerProfiles.userId, userId))
 				.limit(1);
 
+			// Clean data helper (empty string -> null)
+			const cleanData = {
+				...data,
+				brandName: data.brandName || null,
+				companyType: (data.companyType || null) as any,
+				companySize: (data.companySize || null) as any,
+				website: data.website || null,
+				contactEmail: data.contactEmail || null,
+				contactPhone: data.contactPhone || null,
+				recruiterPhone: data.recruiterPhone || null,
+				whatsappNumber: data.whatsappNumber || null,
+				address: data.address || null,
+				pincode: data.pincode || null,
+				description: data.description || null,
+				benefits: (data.benefits && data.benefits.length > 0) ? data.benefits : null,
+			};
+
 			if (existing) {
 				// Update existing profile
 				await db
@@ -308,24 +520,28 @@ router.post(
 					.set({
 						companyName: data.companyName,
 						industry: data.industry,
-						companyType: data.companyType as any,
-						companySize: data.companySize as any,
-						website: data.website || null,
 						contactPersonName: data.contactPersonName,
-						contactEmail: data.contactEmail || null,
-						contactPhone: data.contactPhone || null,
-						address: data.address,
 						city: data.city,
 						state: data.state,
-						pincode: data.pincode || null,
-						description: data.description || null,
 						updatedAt: new Date(),
+						// Optional fields
+						brandName: cleanData.brandName,
+						companyType: cleanData.companyType,
+						companySize: cleanData.companySize,
+						website: cleanData.website,
+						contactEmail: cleanData.contactEmail,
+						contactPhone: cleanData.contactPhone,
+						recruiterPhone: cleanData.recruiterPhone,
+						whatsappNumber: cleanData.whatsappNumber,
+						address: cleanData.address,
+						pincode: cleanData.pincode,
+						description: cleanData.description,
 					})
 					.where(eq(employerProfiles.id, existing.id));
 
 				return res.status(StatusCodes.OK).json({
 					message: "Company details updated successfully",
-					nextStep: "/registration/employer/kyc",
+					nextStep: "/kyc",
 				});
 			}
 
@@ -336,18 +552,22 @@ router.post(
 					userId,
 					companyName: data.companyName,
 					industry: data.industry,
-					companyType: data.companyType as any,
-					companySize: data.companySize as any,
-					website: data.website || null,
 					contactPersonName: data.contactPersonName,
-					contactEmail: data.contactEmail || null,
-					contactPhone: data.contactPhone || null,
-					address: data.address,
 					city: data.city,
 					state: data.state,
 					country: "India",
-					pincode: data.pincode || null,
-					description: data.description || null,
+					// Optional fields
+					brandName: cleanData.brandName,
+					companyType: cleanData.companyType,
+					companySize: cleanData.companySize,
+					website: cleanData.website,
+					contactEmail: cleanData.contactEmail,
+					contactPhone: cleanData.contactPhone,
+					recruiterPhone: cleanData.recruiterPhone,
+					whatsappNumber: cleanData.whatsappNumber,
+					address: cleanData.address,
+					pincode: cleanData.pincode,
+					description: cleanData.description,
 				})
 				.returning({ id: employerProfiles.id });
 
@@ -360,7 +580,7 @@ router.post(
 
 			return res.status(StatusCodes.CREATED).json({
 				message: "Company details added successfully",
-				nextStep: "/registration/employer/kyc",
+				nextStep: "/kyc",
 			});
 		},
 		{
@@ -373,12 +593,11 @@ router.post(
 /**
  * POST /registration/jobseeker/kyc
  * POST /registration/employer/kyc
- * Step 3: Submit KYC documents
+ * Step 3 (jobseeker) / Step 4 (employer): Submit KYC documents
  */
 router.post(
 	"/:userType/kyc",
 	authMiddleware(),
-	requireEmailVerified(),
 	expressAsyncHandler(
 		async (data, req, res) => {
 			const userId = req.userId!;
@@ -389,6 +608,7 @@ router.post(
 				.select({
 					userType: users.userType,
 					verificationStatus: users.verificationStatus,
+					emailVerified: users.emailVerified,
 					email: users.email,
 				})
 				.from(users)
@@ -409,9 +629,28 @@ router.post(
 				});
 			}
 
-			// Check if already submitted
+			// Jobseeker must have verified email; employer can be PAYMENT_VERIFIED
+			if (user.userType === UserTypes.INDIVIDUAL && !user.emailVerified) {
+				throw new HTTPError({
+					httpStatus: StatusCodes.FORBIDDEN,
+					message: "Please verify your email first",
+				});
+			}
+			if (
+				user.userType === UserTypes.EMPLOYER &&
+				user.verificationStatus !== VerificationStatuses.PAYMENT_VERIFIED &&
+				user.verificationStatus !== VerificationStatuses.VERIFIED
+			) {
+				throw new HTTPError({
+					httpStatus: StatusCodes.FORBIDDEN,
+					message: "Complete registration payment and company profile first",
+				});
+			}
+
+			// Check if already submitted (allow DRAFT, PAYMENT_VERIFIED, or REJECTED to submit)
 			if (
 				user.verificationStatus !== VerificationStatuses.DRAFT &&
+				user.verificationStatus !== VerificationStatuses.PAYMENT_VERIFIED &&
 				user.verificationStatus !== VerificationStatuses.REJECTED
 			) {
 				throw new HTTPError({

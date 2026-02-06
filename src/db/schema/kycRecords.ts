@@ -34,6 +34,7 @@ export enum KycDocumentTypes {
 	VOTER_ID = "voter_id",
 	// Business documents
 	GST_CERTIFICATE = "gst_certificate",
+	MSME_SHOP_ACT = "msme_shop_act",
 	CIN = "cin", // Company Identification Number
 	AUTHORIZED_ID = "authorized_id", // Authorized signatory ID
 }
@@ -45,6 +46,7 @@ export const kycDocumentTypeEnum = pgEnum("kyc_document_type", [
 	"driving_license",
 	"voter_id",
 	"gst_certificate",
+	"msme_shop_act",
 	"cin",
 	"authorized_id",
 ]);

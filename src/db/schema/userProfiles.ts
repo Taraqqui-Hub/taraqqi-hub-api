@@ -1,6 +1,7 @@
 import {
 	bigint,
 	bigserial,
+	boolean,
 	date,
 	index,
 	pgEnum,
@@ -52,6 +53,9 @@ export const userProfiles = pgTable(
 
 		// Photo
 		profilePhotoUrl: text("profile_photo_url"),
+
+		// Education status
+		hasNoFormalEducation: boolean("has_no_formal_education").default(false),
 
 		// Timestamps
 		profileLastUpdatedAt: timestamp("profile_last_updated_at", { mode: "date" }),

@@ -83,6 +83,7 @@ authRouter.post(
 					phone: user.phone,
 					userType: user.userType,
 					verificationStatus: user.verificationStatus,
+					emailVerified: user.emailVerified,
 					permissions: user.permissions,
 				},
 			});

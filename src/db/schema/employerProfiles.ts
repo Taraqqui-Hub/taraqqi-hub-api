@@ -54,6 +54,7 @@ export const employerProfiles = pgTable(
 
 		// Company Info
 		companyName: text("company_name").notNull(),
+		brandName: text("brand_name"),
 		companyType: companyTypeEnum("company_type"),
 		industry: text("industry"),
 		companySize: companySizeEnum("company_size"),
@@ -64,11 +65,14 @@ export const employerProfiles = pgTable(
 		contactPersonName: text("contact_person_name"),
 		contactEmail: text("contact_email"),
 		contactPhone: text("contact_phone"),
+		recruiterPhone: text("recruiter_phone"),
+		whatsappNumber: text("whatsapp_number"),
 		address: text("address"),
 		city: text("city"),
 		state: text("state"),
 		country: text("country").default("India"),
 		pincode: text("pincode"),
+		authorizedPersonName: text("authorized_person_name"),
 
 		// Branding (Cloudinary URLs)
 		logoUrl: text("logo_url"),

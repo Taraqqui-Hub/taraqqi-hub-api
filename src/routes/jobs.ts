@@ -14,7 +14,7 @@ import { requirePermission, attachPermissions } from "../middleware/rbacMiddlewa
 import { requireVerified } from "../middleware/verificationMiddleware.ts";
 import expressAsyncHandler from "../utils/expressAsyncHandler.ts";
 import { auditCreate } from "../services/auditService.ts";
-import { eq } from "drizzle-orm";
+import { eq, and, isNull, desc, sql } from "drizzle-orm";
 
 const router = Router();
 
@@ -41,7 +41,7 @@ const updateJobSchema = createJobSchema.partial();
 
 /**
  * GET /jobs
- * List all active jobs (requires verified user)
+ * List all active jobs — promoted first, then recency (requires verified user)
  */
 router.get(
 	"/",
@@ -61,12 +61,38 @@ router.get(
 				salaryMax: jobs.salaryMax,
 				status: jobs.status,
 				publishedAt: jobs.publishedAt,
+				isFeatured: jobs.isFeatured,
+				promotionType: jobs.promotionType,
+				isUrgentHighlight: jobs.isUrgentHighlight,
+				expiresAt: jobs.expiresAt,
 			})
 			.from(jobs)
-			.where(eq(jobs.status, JobStatuses.ACTIVE))
+			.where(
+				and(
+					eq(jobs.status, JobStatuses.ACTIVE),
+					isNull(jobs.deletedAt)
+				)
+			)
+			.orderBy(
+				desc(jobs.isFeatured),
+				desc(jobs.isUrgentHighlight),
+				desc(jobs.promotedAt),
+				desc(jobs.publishedAt)
+			)
 			.limit(50);
 
-		return res.status(StatusCodes.OK).json(result);
+		return res.status(StatusCodes.OK).json(
+			result.map((j) => ({
+				...j,
+				badges: [
+					j.isFeatured && "Featured",
+					j.isUrgentHighlight && "Urgent",
+					j.promotionType && j.promotionType !== "featured" && j.promotionType !== "highlight"
+						? "Promoted"
+						: null,
+				].filter(Boolean),
+			}))
+		);
 	})
 );
 
@@ -85,14 +111,19 @@ router.get(
 		const [job] = await db
 			.select()
 			.from(jobs)
-			.where(eq(jobs.id, jobId))
+			.where(and(eq(jobs.id, jobId), isNull(jobs.deletedAt)))
 			.limit(1);
 
 		if (!job) {
 			return res.status(StatusCodes.NOT_FOUND).json({ error: "Job not found" });
 		}
 
-		return res.status(StatusCodes.OK).json(job);
+		const badges = [
+			job.isFeatured && "Featured",
+			job.isUrgentHighlight && "Urgent",
+			job.promotionType && "Promoted",
+		].filter(Boolean);
+		return res.status(StatusCodes.OK).json({ ...job, badges });
 	})
 );
 

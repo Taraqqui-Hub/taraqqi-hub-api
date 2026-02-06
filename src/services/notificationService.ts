@@ -1077,6 +1077,29 @@ export async function notifyResumeUnlocked(
 	});
 }
 
+export async function notifyProfileViewedByEmployer(
+	jobseekerId: bigint,
+	email: string,
+	companyName: string,
+	jobTitle: string,
+	userName?: string
+): Promise<void> {
+	await sendEmail(email, "application_status", {
+		jobTitle,
+		companyName,
+		status: "Viewed",
+		userName: userName || "Applicant",
+	});
+
+	await createInAppNotification({
+		userId: jobseekerId,
+		type: "application_status",
+		title: "Profile Viewed",
+		message: `Your profile was viewed by ${companyName} for ${jobTitle}`,
+		link: "/applications",
+	});
+}
+
 export async function notifyAccountSuspended(
 	userId: bigint,
 	email: string,

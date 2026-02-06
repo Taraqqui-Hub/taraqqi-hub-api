@@ -38,6 +38,7 @@ export interface LoginResult {
 	phone: string | null;
 	userType: string;
 	verificationStatus: string;
+	emailVerified: boolean;
 	permissions: string[];
 }
 
@@ -187,6 +188,7 @@ class LoginService extends Service<LoginData, LoginResult> {
 				userType: users.userType,
 				verificationStatus: users.verificationStatus,
 				isActive: users.isActive,
+				emailVerified: users.emailVerified,
 			})
 			.from(users)
 			.where(
@@ -258,6 +260,7 @@ class LoginService extends Service<LoginData, LoginResult> {
 			phone: user.phone,
 			userType: user.userType,
 			verificationStatus: user.verificationStatus,
+			emailVerified: user.emailVerified ?? false,
 			permissions,
 		};
 	}

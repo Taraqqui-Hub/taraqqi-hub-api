@@ -68,6 +68,26 @@ router.post(
 		async (data, req, res) => {
 			const userId = req.userId!;
 
+			// Import userProfiles here to avoid circular dependency
+			const { userProfiles } = await import("../db/index.ts");
+
+			// Clear hasNoFormalEducation flag when adding education
+			const [existingProfile] = await db
+				.select()
+				.from(userProfiles)
+				.where(eq(userProfiles.userId, userId))
+				.limit(1);
+
+			if (existingProfile?.hasNoFormalEducation) {
+				await db
+					.update(userProfiles)
+					.set({
+						hasNoFormalEducation: false,
+						updatedAt: new Date(),
+					})
+					.where(eq(userProfiles.id, existingProfile.id));
+			}
+
 			const [record] = await db
 				.insert(educationRecords)
 				.values({
@@ -121,4 +141,48 @@ router.delete(
 	})
 );
 
+/**
+ * POST /profile/jobseeker/education/no-formal
+ * Mark user as having no formal education
+ */
+router.post(
+	"/no-formal",
+	authMiddleware(),
+	expressAsyncHandler(async (req, res) => {
+		const userId = req.userId!;
+
+		// Import userProfiles here to avoid circular dependency
+		const { userProfiles } = await import("../db/index.ts");
+
+		// Check if user profile exists
+		const [existing] = await db
+			.select()
+			.from(userProfiles)
+			.where(eq(userProfiles.userId, userId))
+			.limit(1);
+
+		if (existing) {
+			// Update existing profile
+			await db
+				.update(userProfiles)
+				.set({
+					hasNoFormalEducation: true,
+					updatedAt: new Date(),
+				})
+				.where(eq(userProfiles.id, existing.id));
+		} else {
+			// This shouldn't happen if personal info is required first
+			// but handle it gracefully
+			return res.status(StatusCodes.BAD_REQUEST).json({ 
+				message: "Please complete personal info first" 
+			});
+		}
+
+		return res.status(StatusCodes.OK).json({ 
+			message: "Education status updated successfully" 
+		});
+	})
+);
+
 export default router;
+

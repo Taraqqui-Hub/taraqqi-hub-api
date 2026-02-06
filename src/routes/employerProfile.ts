@@ -28,14 +28,17 @@ const router = Router();
 
 const createProfileSchema = z.object({
 	companyName: z.string().min(2, "Company name is required"),
+	brandName: z.string().optional(),
 	companyType: z.enum(["startup", "sme", "enterprise", "agency"]).optional(),
 	industry: z.string().optional(),
 	companySize: z.enum(["1-10", "11-50", "51-200", "201-500", "500+"]).optional(),
 	foundedYear: z.number().int().min(1800).max(new Date().getFullYear()).optional(),
-	website: z.string().url().optional(),
+	website: z.union([z.string().url(), z.literal(""), z.null(), z.undefined()]).optional(),
 	contactPersonName: z.string().optional(),
-	contactEmail: z.string().email().optional(),
+	contactEmail: z.union([z.string().email(), z.literal(""), z.null(), z.undefined()]).optional(),
 	contactPhone: z.string().optional(),
+	recruiterPhone: z.string().optional(),
+	whatsappNumber: z.string().optional(),
 	address: z.string().optional(),
 	city: z.string().optional(),
 	state: z.string().optional(),
@@ -46,9 +49,11 @@ const createProfileSchema = z.object({
 	benefits: z.array(z.string()).optional(),
 	gstin: z.string().optional(),
 	pan: z.string().optional(),
+	authorizedPersonName: z.string().optional(),
 });
 
 const updateProfileSchema = createProfileSchema.partial();
+
 
 // ============================================
 // Routes
@@ -134,6 +139,7 @@ router.post(
 				.values({
 					userId,
 					companyName: data.companyName,
+					brandName: data.brandName || null,
 					companyType: data.companyType as any,
 					industry: data.industry || null,
 					companySize: data.companySize as any,
@@ -142,6 +148,8 @@ router.post(
 					contactPersonName: data.contactPersonName || null,
 					contactEmail: data.contactEmail || null,
 					contactPhone: data.contactPhone || null,
+					recruiterPhone: data.recruiterPhone || null,
+					whatsappNumber: data.whatsappNumber || null,
 					address: data.address || null,
 					city: data.city || null,
 					state: data.state || null,
@@ -152,6 +160,7 @@ router.post(
 					benefits: data.benefits || null,
 					gstin: data.gstin || null,
 					pan: data.pan || null,
+					authorizedPersonName: data.authorizedPersonName || null,
 				})
 				.returning();
 
@@ -211,6 +220,7 @@ router.patch(
 			};
 
 			if (data.companyName) updateData.companyName = data.companyName;
+			if (data.brandName !== undefined) updateData.brandName = data.brandName || null;
 			if (data.companyType) updateData.companyType = data.companyType;
 			if (data.industry !== undefined) updateData.industry = data.industry || null;
 			if (data.companySize) updateData.companySize = data.companySize;
@@ -219,6 +229,8 @@ router.patch(
 			if (data.contactPersonName !== undefined) updateData.contactPersonName = data.contactPersonName || null;
 			if (data.contactEmail !== undefined) updateData.contactEmail = data.contactEmail || null;
 			if (data.contactPhone !== undefined) updateData.contactPhone = data.contactPhone || null;
+			if (data.recruiterPhone !== undefined) updateData.recruiterPhone = data.recruiterPhone || null;
+			if (data.whatsappNumber !== undefined) updateData.whatsappNumber = data.whatsappNumber || null;
 			if (data.address !== undefined) updateData.address = data.address || null;
 			if (data.city !== undefined) updateData.city = data.city || null;
 			if (data.state !== undefined) updateData.state = data.state || null;
@@ -229,6 +241,7 @@ router.patch(
 			if (data.benefits !== undefined) updateData.benefits = data.benefits || null;
 			if (data.gstin !== undefined) updateData.gstin = data.gstin || null;
 			if (data.pan !== undefined) updateData.pan = data.pan || null;
+			if (data.authorizedPersonName !== undefined) updateData.authorizedPersonName = data.authorizedPersonName || null;
 
 			const [profile] = await db
 				.update(employerProfiles)
