@@ -5,7 +5,7 @@
     "main": "dist/server.js",
     "type": "module",
     "scripts": {
-        "dev": "tsx src/server/index.ts && tsx src/workers/index.ts",
+        "dev": "concurrently \"tsx src/server/index.ts\" \"tsx src/workers/index.ts\"",
         "worker": "tsx src/workers/index.ts",
         "build": "tsc && node esbuild.config.js",
         "start": "node dist/server.js",
@@ -54,6 +54,7 @@
         "@types/nodemailer": "^7.0.9",
         "@types/pg": "^8.11.11",
         "@types/uuid": "^9.0.8",
+        "concurrently": "^9.2.1",
         "drizzle-kit": "^0.30.4",
         "esbuild": "^0.19.8",
         "tsx": "^4.19.3",
