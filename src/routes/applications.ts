@@ -25,6 +25,7 @@ import { requireVerified } from "../middleware/verificationMiddleware.ts";
 import { Permissions } from "../config/permissions.ts";
 import expressAsyncHandler from "../utils/expressAsyncHandler.ts";
 import { auditCreate, auditUpdate } from "../services/auditService.ts";
+import { updateProfileCompletion } from "../services/profileService.ts";
 
 const router = Router();
 
@@ -219,7 +220,9 @@ router.post(
 					message: "Complete your profile before applying",
 				});
 			}
-			const completion = jsProfile.profileCompletion ?? 0;
+			// Recalculate profile completion on the fly to ensure accuracy
+			const status = await updateProfileCompletion(userId);
+			const completion = status.summary.completionPercentage;
 			if (completion < 80) {
 				throw new HTTPError({
 					httpStatus: StatusCodes.BAD_REQUEST,

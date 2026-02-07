@@ -258,3 +258,6 @@ export {
 	AuditActions,
 } from "./schema/auditLogs.ts";
 export type { AuditLog, NewAuditLog } from "./schema/auditLogs.ts";
+
+export { jobViews } from "./schema/jobViews.ts";
+export type { JobView, NewJobView } from "./schema/jobViews.ts";

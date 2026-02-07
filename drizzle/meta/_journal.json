@@ -43,6 +43,13 @@
       "when": 1770400251497,
       "tag": "0005_flaky_kulan_gath",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1770468193141,
+      "tag": "0006_elite_peter_parker",
+      "breakpoints": true
     }
   ]
 }
