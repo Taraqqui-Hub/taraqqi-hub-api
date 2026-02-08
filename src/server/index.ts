@@ -26,6 +26,7 @@ import experienceRouter from "../routes/experience.ts";
 import skillsRouter from "../routes/skills.ts";
 import interestsRouter from "../routes/interests.ts";
 import profileWizardRouter from "../routes/profileWizard.ts";
+import savedJobsRouter from "../routes/savedJobs.ts";
 
 // Admin routes
 import adminDashboardRouter from "../routes/admin/dashboard.ts";
@@ -35,6 +36,7 @@ import adminJobsRouter from "../routes/admin/jobs.ts";
 import adminConfigRouter from "../routes/admin/config.ts";
 import adminAuditLogsRouter from "../routes/admin/auditLogs.ts";
 import adminUsersRouter from "../routes/admin/users.ts";
+import adminPlatformUsersRouter from "../routes/admin/platformUsers.ts";
 
 const port = +(process.env.PORT || "3001");
 
@@ -146,6 +148,14 @@ new Server({
 		{
 			path: "/admin/users",
 			handlers: [adminUsersRouter],
+		},
+		{
+			path: "/admin/platform-users",
+			handlers: [adminPlatformUsersRouter],
+		},
+		{
+			path: "/saved-jobs",
+			handlers: [savedJobsRouter],
 		},
 	],
 });

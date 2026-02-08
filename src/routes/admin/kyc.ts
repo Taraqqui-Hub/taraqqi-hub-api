@@ -266,6 +266,7 @@ router.post(
 				id: users.id,
 				email: users.email,
 				name: users.name,
+				userType: users.userType,
 				verificationStatus: users.verificationStatus,
 			})
 			.from(users)
@@ -320,10 +321,11 @@ router.post(
 			requestId: req.requestId,
 		}, `Approved verification for user ${user.email || userId}`);
 
-		// Send email notification
+		// Send email notification (with userType for template)
 		if (user.email) {
 			await sendEmail(user.email, "kyc_approved", {
 				userName: user.name || user.email.split("@")[0],
+				userType: user.userType,
 			});
 		}
 

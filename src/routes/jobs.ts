@@ -8,7 +8,7 @@ import { z } from "zod";
 
 import { db } from "../config/database.ts";
 import { Permissions } from "../config/permissions.ts";
-import { jobs, JobStatuses, JobTypes, employerProfiles, applications, jobViews } from "../db/index.ts";
+import { jobs, JobStatuses, JobTypes, employerProfiles, applications, jobViews, savedJobs } from "../db/index.ts";
 import authMiddleware from "../middleware/authMiddleware.ts";
 import { requirePermission, attachPermissions } from "../middleware/rbacMiddleware.ts";
 import { requireVerified } from "../middleware/verificationMiddleware.ts";
@@ -145,6 +145,7 @@ router.get(
 				viewsCount: jobs.viewsCount,
 				applicationsCount: jobs.applicationsCount,
 				hasApplied: sql<boolean>`CASE WHEN ${applications.id} IS NOT NULL THEN true ELSE false END`,
+				isSaved: sql<boolean>`CASE WHEN ${savedJobs.id} IS NOT NULL THEN true ELSE false END`,
 			})
 			.from(jobs)
 			.leftJoin(
@@ -153,6 +154,13 @@ router.get(
 					eq(applications.jobId, jobs.id),
 					eq(applications.jobseekerId, userId),
 					isNull(applications.deletedAt)
+				)
+			)
+			.leftJoin(
+				savedJobs,
+				and(
+					eq(savedJobs.jobId, jobs.id),
+					eq(savedJobs.userId, userId)
 				)
 			)
 			.where(and(...conditions))
@@ -174,6 +182,7 @@ router.get(
 			jobs: result.map((j) => ({
 				...j,
 				hasApplied: j.hasApplied,
+				isSaved: j.isSaved,
 				badges: [
 					j.isFeatured && "Featured",
 					j.isUrgentHighlight && "Urgent",
@@ -302,6 +311,17 @@ router.get(
 				)
 			)
 			.limit(1);
+		
+		const [isSaved] = await db
+			.select({ id: savedJobs.id })
+			.from(savedJobs)
+			.where(
+				and(
+					eq(savedJobs.jobId, job.id),
+					eq(savedJobs.userId, userId)
+				)
+			)
+			.limit(1);
 
 		// Check for unique view
 		const [existingView] = await db
@@ -345,6 +365,7 @@ router.get(
 			badges,
 			company: company || null,
 			hasApplied: !!hasApplied,
+			isSaved: !!isSaved,
 		});
 	})
 );

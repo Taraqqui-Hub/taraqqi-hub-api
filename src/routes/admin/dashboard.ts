@@ -43,12 +43,12 @@ router.get(
 		const startOfWeek = new Date(now);
 		startOfWeek.setDate(now.getDate() - 7);
 
-		// User counts
+		// User counts (individual = jobseekers / non-employer users)
 		const [userCounts] = await db
 			.select({
 				total: sql<number>`count(*)::int`,
 				employers: sql<number>`count(*) filter (where ${users.userType} = 'employer')::int`,
-				jobseekers: sql<number>`count(*) filter (where ${users.userType} = 'jobseeker')::int`,
+				jobseekers: sql<number>`count(*) filter (where ${users.userType} = 'individual')::int`,
 				admins: sql<number>`count(*) filter (where ${users.userType} in ('admin', 'super_admin'))::int`,
 				thisMonth: sql<number>`count(*) filter (where ${users.createdAt} >= ${startOfMonth})::int`,
 			})

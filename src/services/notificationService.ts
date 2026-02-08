@@ -586,6 +586,31 @@ const emailTemplates: Record<string, (data: any) => { subject: string; html: str
 		`, "Your account has been suspended. Please contact support."),
 	}),
 
+	account_deactivated: (data) => ({
+		subject: "Your Taraqqi Hub Account Has Been Deactivated",
+		html: getBaseTemplate(`
+			<h1>Account Deactivation Notice</h1>
+			<p class="greeting">Dear ${data.userName || "User"},</p>
+			<p>Your Taraqqi Hub account has been deactivated by our administration team.</p>
+			
+			<div class="warning-box">
+				<p><strong>Reason provided:</strong> ${data.reason || "No reason was specified."}</p>
+			</div>
+			
+			<h3 style="margin-top: 32px; margin-bottom: 16px; color: #1a1a2e;">What this means:</h3>
+			<ul style="color: #4a5568; padding-left: 20px; margin: 16px 0;">
+				<li>You will not be able to log in to your account</li>
+				<li>Your profile and data remain stored but are not accessible</li>
+			</ul>
+			
+			<p>If you believe this was done in error or wish to appeal, please contact our support team with your registered email and a brief explanation.</p>
+			
+			<p>Contact us at: <a href="mailto:${SUPPORT_EMAIL}" style="color: #4ade80;">${SUPPORT_EMAIL}</a></p>
+			
+			<p style="margin-top: 24px; color: #64748b; font-size: 14px;">We are committed to transparency in all account actions.</p>
+		`, "Your account has been deactivated. Reason provided."),
+	}),
+
 	// ============================================
 	// Job Applications
 	// ============================================
@@ -1112,6 +1137,18 @@ export async function notifyAccountSuspended(
 	}, true); // Send immediately for important notifications
 }
 
+export async function notifyAccountDeactivated(
+	userId: bigint,
+	email: string,
+	reason: string,
+	userName?: string
+): Promise<void> {
+	await sendEmail(email, "account_deactivated", {
+		reason,
+		userName: userName || "User"
+	}, true); // Send immediately for transparency
+}
+
 export async function notifyOtpVerification(
 	email: string,
 	otp: string,
@@ -1141,5 +1178,6 @@ export default {
 	notifyPaymentSuccess,
 	notifyResumeUnlocked,
 	notifyAccountSuspended,
+	notifyAccountDeactivated,
 	notifyOtpVerification,
 };
