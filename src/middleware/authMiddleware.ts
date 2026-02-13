@@ -57,6 +57,7 @@ const authMiddlewareCreator =
 				return next(ForbiddenError);
 
 			req.userId = userId;
+			req.userType = userType;
 			return next();
 		} catch (error) {
 			console.log("Auth middleware error:", error);

@@ -9,7 +9,7 @@ import { z } from "zod";
 import { eq, and, isNull, desc } from "drizzle-orm";
 
 import { db } from "../config/database.ts";
-import { kycRecords, KycStatuses, KycDocumentTypes } from "../db/index.ts";
+import { kycRecords, KycStatuses, KycDocumentTypes, users, VerificationStatuses } from "../db/index.ts";
 import { HTTPError } from "../config/error.ts";
 import authMiddleware from "../middleware/authMiddleware.ts";
 import { requirePermission } from "../middleware/rbacMiddleware.ts";
@@ -143,6 +143,15 @@ router.post(
 					status: KycStatuses.PENDING,
 				})
 				.returning();
+
+			// Update user status
+			await db
+				.update(users)
+				.set({
+					verificationStatus: VerificationStatuses.SUBMITTED,
+					verificationSubmittedAt: new Date(),
+				})
+				.where(eq(users.id, userId));
 
 			// Audit log
 			await auditCreate(

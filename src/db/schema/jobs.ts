@@ -145,6 +145,7 @@ export const jobs = pgTable(
 		applicationDeadline: timestamp("application_deadline", { mode: "date" }),
 		maxApplications: integer("max_applications"),
 		autoCloseOnLimit: boolean("auto_close_on_limit").notNull().default(false),
+		isResumeRequired: boolean("is_resume_required").notNull().default(false),
 
 		// Stats
 		viewsCount: integer("views_count").notNull().default(0),

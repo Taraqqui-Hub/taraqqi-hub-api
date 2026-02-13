@@ -86,6 +86,7 @@ const createJobSchema = z.object({
 	applicationDeadline: z.string().optional(),
 	maxApplications: z.number().int().positive().optional(),
 	autoCloseOnLimit: z.boolean().default(false),
+	isResumeRequired: z.boolean().default(false),
 	status: z.enum(["draft", "active"]).default("draft"),
 });
 
@@ -407,6 +408,7 @@ router.post(
 						: null,
 					maxApplications: data.maxApplications ?? null,
 					autoCloseOnLimit: data.autoCloseOnLimit ?? false,
+					isResumeRequired: data.isResumeRequired ?? false,
 					status: data.status as any,
 					listingDurationDays: listingDays,
 					expiresAt,
@@ -526,6 +528,7 @@ router.patch(
 			}
 			if (data.maxApplications !== undefined) updateData.maxApplications = data.maxApplications;
 			if (data.autoCloseOnLimit !== undefined) updateData.autoCloseOnLimit = data.autoCloseOnLimit;
+			if (data.isResumeRequired !== undefined) updateData.isResumeRequired = data.isResumeRequired;
 			if (data.status) {
 				updateData.status = data.status;
 				if (data.status === "active" && !existing.publishedAt) {
@@ -783,7 +786,7 @@ router.get(
 				internalNotes: applications.internalNotes,
 				appliedAt: applications.appliedAt,
 				viewedAt: applications.viewedAt,
-				// Jobseeker basic info (no contact - gated)
+				// Jobseeker info
 				profile: {
 					id: jobseekerProfiles.id,
 					firstName: jobseekerProfiles.firstName,
@@ -793,12 +796,22 @@ router.get(
 					experienceYears: jobseekerProfiles.experienceYears,
 					skills: jobseekerProfiles.skills,
 					profilePhotoUrl: jobseekerProfiles.profilePhotoUrl,
+					resumeUrl: jobseekerProfiles.resumeUrl,
+				},
+				// User contact info
+				contact: {
+					email: users.email,
+					phone: users.phone,
 				},
 			})
 			.from(applications)
 			.innerJoin(
 				jobseekerProfiles,
 				eq(applications.jobseekerId, jobseekerProfiles.userId)
+			)
+			.innerJoin(
+				users,
+				eq(applications.jobseekerId, users.id)
 			)
 			.where(
 				and(
@@ -894,7 +907,8 @@ router.post(
 			.from(users)
 			.where(eq(users.id, app.jobseekerId))
 			.limit(1);
-		if (jobseekerUser?.email) {
+		// Only notify if this is the first time viewing
+		if (!app.viewedAt && jobseekerUser?.email) {
 			await notifyProfileViewedByEmployer(
 				app.jobseekerId,
 				jobseekerUser.email,

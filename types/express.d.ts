@@ -5,6 +5,7 @@ declare global {
 		interface Request {
 			// Auth
 			userId?: bigint;
+			userType?: string;
 			userPermissions?: string[];
 
 			// Request context

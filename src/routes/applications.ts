@@ -39,6 +39,7 @@ router.use(requireVerified());
 
 const applySchema = z.object({
 	jobId: z.string(),
+	resumeUrl: z.string().url().optional(),
 	coverLetter: z.string().max(2000).optional(),
 	expectedSalary: z.number().positive().optional(),
 	noticePeriodDays: z.number().int().min(0).max(180).optional(),
@@ -176,6 +177,7 @@ router.post(
 					maxApplications: jobs.maxApplications,
 					applicationsCount: jobs.applicationsCount,
 					autoCloseOnLimit: jobs.autoCloseOnLimit,
+					isResumeRequired: jobs.isResumeRequired,
 				})
 				.from(jobs)
 				.where(
@@ -281,6 +283,15 @@ router.post(
 				.from(jobseekerProfiles)
 				.where(eq(jobseekerProfiles.userId, userId))
 				.limit(1);
+			
+			const finalResumeUrl = data.resumeUrl || profile?.resumeUrl;
+
+			if (job.isResumeRequired && !finalResumeUrl) {
+				throw new HTTPError({
+					httpStatus: StatusCodes.BAD_REQUEST,
+					message: "Resume is required for this job application",
+				});
+			}
 
 			// Create application
 			const [application] = await db
@@ -288,7 +299,7 @@ router.post(
 				.values({
 					jobId: BigInt(data.jobId),
 					jobseekerId: userId,
-					resumeUrl: profile?.resumeUrl || null,
+					resumeUrl: finalResumeUrl || null,
 					coverLetter: data.coverLetter || null,
 					expectedSalary: data.expectedSalary?.toString() || null,
 					noticePeriodDays: data.noticePeriodDays || null,

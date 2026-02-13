@@ -37,6 +37,7 @@ import adminConfigRouter from "../routes/admin/config.ts";
 import adminAuditLogsRouter from "../routes/admin/auditLogs.ts";
 import adminUsersRouter from "../routes/admin/users.ts";
 import adminPlatformUsersRouter from "../routes/admin/platformUsers.ts";
+import adminAdminUsersRouter from "../routes/admin/adminUsers.ts";
 
 const port = +(process.env.PORT || "3001");
 
@@ -152,6 +153,10 @@ new Server({
 		{
 			path: "/admin/platform-users",
 			handlers: [adminPlatformUsersRouter],
+		},
+		{
+			path: "/admin/admin-users",
+			handlers: [adminAdminUsersRouter],
 		},
 		{
 			path: "/saved-jobs",

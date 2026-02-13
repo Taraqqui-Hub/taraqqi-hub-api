@@ -274,6 +274,7 @@ router.get(
 				publishedAt: jobs.publishedAt,
 				createdAt: jobs.createdAt,
 				employerId: jobs.employerId,
+				isResumeRequired: jobs.isResumeRequired,
 			})
 			.from(jobs)
 			.where(whereCondition)

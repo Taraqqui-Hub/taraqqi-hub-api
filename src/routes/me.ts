@@ -123,6 +123,7 @@ meRouter.get(
 				profileComplete,
 				profileCompletionPercentage,
 				hasPreferences,
+				rejectedReason: user.rejectedReason,
 			},
 			verification: verificationInfo,
 			roles: roles.map((r) => r.name),
