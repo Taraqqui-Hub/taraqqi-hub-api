@@ -36,6 +36,22 @@ import { notifyEmailVerification } from "../services/notificationService.ts";
 
 const authRouter = Router();
 
+// Refresh token cookie options
+// - Different domains (e.g. frontend one.abc.com, backend one.xyz.com): set AUTH_CROSS_DOMAIN=true → SameSite=None; Secure (HTTPS required)
+// - Same parent domain (e.g. app.example.com + api.example.com): set COOKIE_DOMAIN=.example.com → cookie shared across subdomains
+const refreshCookieOptions = () => {
+	const crossDomain = process.env.AUTH_CROSS_DOMAIN === "true";
+	const domain = process.env.COOKIE_DOMAIN || undefined;
+	return {
+		httpOnly: true,
+		secure: process.env.NODE_ENV === "production" || crossDomain,
+		sameSite: (crossDomain ? "none" : "lax") as "none" | "lax",
+		maxAge: TOKEN_CONFIG.REFRESH_TOKEN_COOKIE_EXPIRY,
+		path: "/",
+		...(domain && !crossDomain && { domain }),
+	};
+};
+
 // ============================================
 // Login
 // ============================================
@@ -55,14 +71,8 @@ authRouter.post(
 			});
 			const tokens = await createRefreshTokenService.handle();
 
-			// Set refresh token as httpOnly cookie
-			res.cookie("refreshToken", tokens.refreshToken, {
-				httpOnly: true,
-				secure: process.env.NODE_ENV === "production",
-				sameSite: "strict",
-				maxAge: TOKEN_CONFIG.REFRESH_TOKEN_COOKIE_EXPIRY,
-				path: "/",
-			});
+			// Set refresh token as httpOnly cookie (persists across page reload / new tab)
+			res.cookie("refreshToken", tokens.refreshToken, refreshCookieOptions());
 
 			// Audit log
 			await auditLogin(user.userId, user.email, {
@@ -121,14 +131,8 @@ authRouter.post(
 			});
 			const tokens = await createRefreshTokenService.handle();
 
-			// Set refresh token as httpOnly cookie
-			res.cookie("refreshToken", tokens.refreshToken, {
-				httpOnly: true,
-				secure: process.env.NODE_ENV === "production",
-				sameSite: "strict",
-				maxAge: TOKEN_CONFIG.REFRESH_TOKEN_COOKIE_EXPIRY,
-				path: "/",
-			});
+			// Set refresh token as httpOnly cookie (persists across page reload / new tab)
+			res.cookie("refreshToken", tokens.refreshToken, refreshCookieOptions());
 
 			return res.status(StatusCodes.CREATED).json({
 				message:
@@ -338,19 +342,17 @@ authRouter.delete(
 				}
 			}
 
-			// Clear cookies
-			res.clearCookie("auth", {
+			// Clear cookies (must match options used when setting, e.g. for cross-domain)
+			const crossDomain = process.env.AUTH_CROSS_DOMAIN === "true";
+			const clearOpts = {
 				path: "/",
-				sameSite: "strict",
+				sameSite: (crossDomain ? "none" : "lax") as "none" | "lax",
 				httpOnly: true,
-				secure: process.env.NODE_ENV === "production",
-			});
-			res.clearCookie("refreshToken", {
-				path: "/",
-				sameSite: "strict",
-				httpOnly: true,
-				secure: process.env.NODE_ENV === "production",
-			});
+				secure: process.env.NODE_ENV === "production" || crossDomain,
+				...(process.env.COOKIE_DOMAIN && !crossDomain && { domain: process.env.COOKIE_DOMAIN }),
+			};
+			res.clearCookie("auth", clearOpts);
+			res.clearCookie("refreshToken", clearOpts);
 
 			return res.status(StatusCodes.OK).json({
 				message: "Logged out successfully.",
