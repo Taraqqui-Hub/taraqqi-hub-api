@@ -111,7 +111,8 @@ export const jobs = pgTable(
 		area: text("area"),
 		state: text("state"),
 		country: text("country").default("India"),
-		address: text("address"),
+		address: text("address"), // Address Line 1
+		addressLine2: text("address_line_2"),
 
 		// Compensation
 		salaryMin: decimal("salary_min", { precision: 12, scale: 2 }),

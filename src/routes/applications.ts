@@ -72,6 +72,7 @@ router.get(
 				coverLetter: applications.coverLetter,
 				expectedSalary: applications.expectedSalary,
 				noticePeriodDays: applications.noticePeriodDays,
+				resumeUrl: applications.resumeUrl,
 				// Job info
 				job: {
 					id: jobs.id,
@@ -82,6 +83,7 @@ router.get(
 					jobType: jobs.jobType,
 					salaryMin: jobs.salaryMin,
 					salaryMax: jobs.salaryMax,
+					isResumeRequired: jobs.isResumeRequired,
 				},
 			})
 			.from(applications)

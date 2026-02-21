@@ -57,7 +57,7 @@ const createJobSchema = z.object({
 	category: z.string().min(1, "Category is required"),
 	jobType: z.enum(["full-time", "part-time", "contract", "internship", "freelance"]),
 	locationType: z.enum(["onsite", "remote", "hybrid"]),
-	description: z.string().min(50, "Description must be at least 50 characters"),
+	description: z.string().min(1, "Description is required"),
 	roleSummary: z.string().max(500).optional(),
 	requirements: z.string().optional(),
 	responsibilities: z.string().optional(),
@@ -72,6 +72,7 @@ const createJobSchema = z.object({
 	area: z.string().optional(),
 	state: z.string().optional(),
 	address: z.string().optional(),
+	addressLine2: z.string().optional(),
 	salaryMin: z.number().positive().optional(),
 	salaryMax: z.number().positive().optional(),
 	salaryType: z.enum(["monthly", "yearly"]).optional(),
@@ -389,6 +390,7 @@ router.post(
 					area: data.area || null,
 					state: data.state || null,
 					address: data.address || null,
+					addressLine2: data.addressLine2 || null,
 					salaryMin: data.salaryMin?.toString() || null,
 					salaryMax: data.salaryMax?.toString() || null,
 					salaryType: data.salaryType || "yearly",
@@ -507,6 +509,7 @@ router.patch(
 			if (data.area !== undefined) updateData.area = data.area || null;
 			if (data.state !== undefined) updateData.state = data.state || null;
 			if (data.address !== undefined) updateData.address = data.address || null;
+			if (data.addressLine2 !== undefined) updateData.addressLine2 = data.addressLine2 || null;
 			if (data.salaryMin !== undefined) updateData.salaryMin = data.salaryMin?.toString() || null;
 			if (data.salaryMax !== undefined) updateData.salaryMax = data.salaryMax?.toString() || null;
 			if (data.salaryType !== undefined) updateData.salaryType = data.salaryType || null;
@@ -756,7 +759,7 @@ router.get(
 
 		// Verify ownership
 		const [job] = await db
-			.select({ id: jobs.id, title: jobs.title })
+			.select({ id: jobs.id, title: jobs.title, isResumeRequired: jobs.isResumeRequired })
 			.from(jobs)
 			.where(
 				and(
@@ -822,7 +825,7 @@ router.get(
 			.orderBy(desc(applications.appliedAt));
 
 		return res.status(StatusCodes.OK).json({
-			job: { id: job.id, title: job.title },
+			job: { id: job.id, title: job.title, isResumeRequired: job.isResumeRequired },
 			applicants,
 		});
 	})
