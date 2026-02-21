@@ -79,6 +79,7 @@ const employerProfileSchema = z.object({
 	state: z.string().min(1, "State is required"),
 	pincode: z.string().optional(),
 	description: z.string().max(2000).optional(),
+	benefits: z.array(z.string()).optional(),
 });
 
 // KYC Document Schema (employer: gst_certificate, msme_shop_act, cin, authorized_id)
@@ -536,6 +537,7 @@ router.post(
 						address: cleanData.address,
 						pincode: cleanData.pincode,
 						description: cleanData.description,
+						benefits: cleanData.benefits,
 					})
 					.where(eq(employerProfiles.id, existing.id));
 
@@ -568,6 +570,7 @@ router.post(
 					address: cleanData.address,
 					pincode: cleanData.pincode,
 					description: cleanData.description,
+					benefits: cleanData.benefits,
 				})
 				.returning({ id: employerProfiles.id });
 
