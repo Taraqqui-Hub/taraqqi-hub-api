@@ -559,7 +559,6 @@ router.post(
 			}
 
 			// Create new profile (explicit transaction so insert is committed before we respond)
-			let profileId: bigint;
 			await db.transaction(async (tx) => {
 				const [profile] = await tx
 					.insert(employerProfiles)
@@ -593,7 +592,6 @@ router.post(
 						message: "Failed to create employer profile",
 					});
 				}
-				profileId = profile.id;
 			});
 
 			// Verify row exists (ensures we never return success if DB didn't persist)
@@ -609,7 +607,7 @@ router.post(
 				});
 			}
 
-			await auditCreate("employer_profile", profileId, { companyName: data.companyName }, {
+			await auditCreate("employer_profile", verify.id, { companyName: data.companyName }, {
 				userId,
 				ipAddress: req.clientIp,
 				userAgent: req.clientUserAgent,
