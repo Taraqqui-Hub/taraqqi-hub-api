@@ -1,7 +1,7 @@
 {
     "name": "taraqqi-hub-api",
     "version": "1.0.0",
-    "description": "Taraqqi Hub Backend API",
+    "description": "Equalio Backend API",
     "main": "dist/server.js",
     "type": "module",
     "scripts": {

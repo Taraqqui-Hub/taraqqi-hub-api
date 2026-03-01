@@ -1,4 +1,4 @@
-# Taraqqi Hub API
+# Equalio API
 
 An independent backend API with JWT-based authentication.
 

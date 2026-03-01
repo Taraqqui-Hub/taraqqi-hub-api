@@ -1,0 +1,1 @@
+ALTER TABLE "jobs" ADD COLUMN "how_to_apply" text DEFAULT 'platform' NOT NULL;

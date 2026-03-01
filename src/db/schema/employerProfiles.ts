@@ -67,8 +67,12 @@ export const employerProfiles = pgTable(
 		contactPhone: text("contact_phone"),
 		recruiterPhone: text("recruiter_phone"),
 		whatsappNumber: text("whatsapp_number"),
+		// Applicant-facing contact visibility (employer chooses to show call/WhatsApp on job detail)
+		showCallToApplicants: boolean("show_call_to_applicants").default(true),
+		showWhatsAppToApplicants: boolean("show_whatsapp_to_applicants").default(true),
 		address: text("address"),
 		city: text("city"),
+		district: text("district"),
 		state: text("state"),
 		country: text("country").default("India"),
 		pincode: text("pincode"),

@@ -39,8 +39,11 @@ const createProfileSchema = z.object({
 	contactPhone: z.string().optional(),
 	recruiterPhone: z.string().optional(),
 	whatsappNumber: z.string().optional(),
+	showCallToApplicants: z.boolean().optional(),
+	showWhatsAppToApplicants: z.boolean().optional(),
 	address: z.string().optional(),
 	city: z.string().optional(),
+	district: z.string().optional(),
 	state: z.string().optional(),
 	country: z.string().default("India"),
 	pincode: z.string().optional(),
@@ -150,8 +153,11 @@ router.post(
 					contactPhone: data.contactPhone || null,
 					recruiterPhone: data.recruiterPhone || null,
 					whatsappNumber: data.whatsappNumber || null,
+					showCallToApplicants: data.showCallToApplicants ?? true,
+					showWhatsAppToApplicants: data.showWhatsAppToApplicants ?? true,
 					address: data.address || null,
 					city: data.city || null,
+					district: data.district || null,
 					state: data.state || null,
 					country: data.country,
 					pincode: data.pincode || null,
@@ -231,8 +237,11 @@ router.patch(
 			if (data.contactPhone !== undefined) updateData.contactPhone = data.contactPhone || null;
 			if (data.recruiterPhone !== undefined) updateData.recruiterPhone = data.recruiterPhone || null;
 			if (data.whatsappNumber !== undefined) updateData.whatsappNumber = data.whatsappNumber || null;
+			if (data.showCallToApplicants !== undefined) updateData.showCallToApplicants = data.showCallToApplicants;
+			if (data.showWhatsAppToApplicants !== undefined) updateData.showWhatsAppToApplicants = data.showWhatsAppToApplicants;
 			if (data.address !== undefined) updateData.address = data.address || null;
 			if (data.city !== undefined) updateData.city = data.city || null;
+			if (data.district !== undefined) updateData.district = data.district || null;
 			if (data.state !== undefined) updateData.state = data.state || null;
 			if (data.country) updateData.country = data.country;
 			if (data.pincode !== undefined) updateData.pincode = data.pincode || null;

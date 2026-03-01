@@ -33,7 +33,7 @@ interface UploadConfig {
 
 const uploadConfigs: Record<UploadType, UploadConfig> = {
 	[UploadTypes.RESUME]: {
-		folder: "taraqqi-hub/resumes",
+		folder: "equalio/resumes",
 		resourceType: "raw",
 		allowedFormats: ["pdf", "doc", "docx"],
 		maxFileSizeBytes: 5 * 1024 * 1024,
@@ -41,7 +41,7 @@ const uploadConfigs: Record<UploadType, UploadConfig> = {
 		tags: ["resume", "sensitive"],
 	},
 	[UploadTypes.KYC_DOCUMENT]: {
-		folder: "taraqqi-hub/kyc",
+		folder: "equalio/kyc",
 		resourceType: "auto",
 		allowedFormats: ["pdf", "jpg", "jpeg", "png"],
 		maxFileSizeBytes: 10 * 1024 * 1024,
@@ -49,7 +49,7 @@ const uploadConfigs: Record<UploadType, UploadConfig> = {
 		tags: ["kyc", "sensitive", "pii"],
 	},
 	[UploadTypes.PROFILE_PHOTO]: {
-		folder: "taraqqi-hub/profile-photos",
+		folder: "equalio/profile-photos",
 		resourceType: "image",
 		allowedFormats: ["jpg", "jpeg", "png", "webp"],
 		maxFileSizeBytes: 2 * 1024 * 1024,
@@ -57,7 +57,7 @@ const uploadConfigs: Record<UploadType, UploadConfig> = {
 		tags: ["profile-photo"],
 	},
 	[UploadTypes.COMPANY_LOGO]: {
-		folder: "taraqqi-hub/company-logos",
+		folder: "equalio/company-logos",
 		resourceType: "image",
 		allowedFormats: ["jpg", "jpeg", "png", "svg", "webp"],
 		maxFileSizeBytes: 1 * 1024 * 1024,

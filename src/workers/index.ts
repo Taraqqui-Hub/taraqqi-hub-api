@@ -41,8 +41,8 @@ const transporter = nodemailer.createTransport({
 	},
 });
 
-const FROM_EMAIL = process.env.FROM_EMAIL || "noreply@taraqqihub.com";
-const FROM_NAME = process.env.FROM_NAME || "Taraqqi Hub";
+const FROM_EMAIL = process.env.FROM_EMAIL || "noreply@equalio.com";
+const FROM_NAME = process.env.FROM_NAME || "Equalio";
 
 // ============================================
 // Email Worker

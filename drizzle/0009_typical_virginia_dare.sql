@@ -1,0 +1,2 @@
+ALTER TABLE "employer_profiles" ADD COLUMN "show_call_to_applicants" boolean DEFAULT true;--> statement-breakpoint
+ALTER TABLE "employer_profiles" ADD COLUMN "show_whatsapp_to_applicants" boolean DEFAULT true;

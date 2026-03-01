@@ -15,6 +15,7 @@ import { z } from "zod";
 import { getUserPermissions, getUserRoles } from "../services/permissionService.ts";
 import { getUserVerificationStatus } from "../middleware/verificationMiddleware.ts";
 import { getPhoneValidationSchema } from "../config/zodSchemas.ts";
+import { HTTPError } from "../config/error.ts";
 
 const meRouter = Router();
 
@@ -158,12 +159,28 @@ meRouter.patch(
 			if (phone) updateData.phone = phone;
 			if (whatsappNumber) updateData.whatsappNumber = whatsappNumber;
 
-			// Update user
-			await db.update(users).set(updateData).where(eq(users.id, userId));
+			try {
+				// Update user
+				await db.update(users).set(updateData).where(eq(users.id, userId));
 
-			return res.status(StatusCodes.OK).json({
-				message: "Profile updated successfully",
-			});
+				return res.status(StatusCodes.OK).json({
+					message: "Profile updated successfully",
+				});
+			} catch (error: any) {
+				if (error.code === '23505') {
+					let field = 'Field';
+					if (error.constraint === 'idx_users_phone' || error.detail?.includes('phone')) {
+						field = 'Phone number';
+					} else if (error.detail?.includes('whatsappNumber') || error.detail?.includes('whatsapp_number')) {
+						field = 'WhatsApp number';
+					}
+					throw new HTTPError({
+						httpStatus: StatusCodes.CONFLICT,
+						message: `${field} is already associated with another account. Please use a different number.`,
+					});
+				}
+				throw error;
+			}
 		},
 		{
 			validationSchema: z.object({

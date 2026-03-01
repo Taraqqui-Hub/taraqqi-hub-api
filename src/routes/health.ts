@@ -5,7 +5,7 @@ const healthRouter = Router();
 healthRouter.get("/", (_req, res) => {
 	res.status(200).json({
 		status: "ok",
-		message: "Taraqqi Hub API is running",
+		message: "Equalio API is running",
 		timestamp: new Date().toISOString(),
 	});
 });

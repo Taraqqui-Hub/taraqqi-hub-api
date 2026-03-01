@@ -42,7 +42,7 @@ import adminAdminUsersRouter from "../routes/admin/adminUsers.ts";
 const port = +(process.env.PORT || "3001");
 
 new Server({
-	name: "taraqqi-hub-api",
+	name: "equalio-api",
 	port,
 	routes: [
 		{

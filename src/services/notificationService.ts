@@ -22,10 +22,10 @@ const transporter = nodemailer.createTransport({
 	},
 });
 
-const FROM_EMAIL = process.env.FROM_EMAIL || "noreply@taraqqihub.com";
-const FROM_NAME = process.env.FROM_NAME || "Taraqqi Hub";
-const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || "support@taraqqihub.com";
-const COMPANY_ADDRESS = process.env.COMPANY_ADDRESS || "Taraqqi Hub Technologies Pvt. Ltd., India";
+const FROM_EMAIL = process.env.FROM_EMAIL || "noreply@equalio.com";
+const FROM_NAME = process.env.FROM_NAME || "Equalio";
+const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || "support@equalio.com";
+const COMPANY_ADDRESS = process.env.COMPANY_ADDRESS || "Equalio Technologies Pvt. Ltd., India";
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 
 // ============================================
@@ -39,7 +39,7 @@ const getBaseTemplate = (content: string, preheader: string = "") => `
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <title>Taraqqi Hub</title>
+  <title>Equalio</title>
   <style>
     /* Reset styles */
     body, table, td, p, a, li { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
@@ -338,7 +338,7 @@ const getBaseTemplate = (content: string, preheader: string = "") => `
           <!-- Header -->
           <tr>
             <td class="email-header">
-              <a href="${FRONTEND_URL}" class="logo">Taraqqi<span>Hub</span></a>
+              <a href="${FRONTEND_URL}" class="logo">Equalio</a>
             </td>
           </tr>
           
@@ -363,10 +363,10 @@ const getBaseTemplate = (content: string, preheader: string = "") => `
                 Need help? Contact us at <a href="mailto:${SUPPORT_EMAIL}" style="color: #4ade80;">${SUPPORT_EMAIL}</a>
               </p>
               <div class="footer-legal">
-                <p style="margin: 0;">© ${new Date().getFullYear()} Taraqqi Hub. All rights reserved.</p>
+                <p style="margin: 0;">© ${new Date().getFullYear()} Equalio. All rights reserved.</p>
                 <p style="margin: 4px 0 0 0;">${COMPANY_ADDRESS}</p>
                 <p style="margin: 12px 0 0 0;">
-                  You received this email because you have an account with Taraqqi Hub.
+                  You received this email because you have an account with Equalio.
                   <br>
                   <a href="${FRONTEND_URL}/unsubscribe" style="color: #64748b;">Unsubscribe</a> from non-essential emails.
                 </p>
@@ -391,11 +391,11 @@ const emailTemplates: Record<string, (data: any) => { subject: string; html: str
 	// ============================================
 	
 	registration_success: (data) => ({
-		subject: "Welcome to Taraqqi Hub - Let's Get Started",
+		subject: "Welcome to Equalio - Let's Get Started",
 		html: getBaseTemplate(`
-			<h1>Welcome to Taraqqi Hub!</h1>
+			<h1>Welcome to Equalio!</h1>
 			<p class="greeting">Dear ${data.userName || "User"},</p>
-			<p>Thank you for joining Taraqqi Hub - your trusted platform for connecting talent with opportunities.</p>
+			<p>Thank you for joining Equalio - your trusted platform for connecting talent with opportunities.</p>
 			
 			<p>To get started, please verify your email address and complete your profile:</p>
 			
@@ -419,7 +419,7 @@ const emailTemplates: Record<string, (data: any) => { subject: string; html: str
 	}),
 
 	email_verification: (data) => ({
-		subject: "Verify Your Email - Taraqqi Hub",
+		subject: "Verify Your Email - Equalio",
 		html: getBaseTemplate(`
 			<h1>Verify Your Email Address</h1>
 			<p class="greeting">Dear ${data.userName || "User"},</p>
@@ -435,7 +435,7 @@ const emailTemplates: Record<string, (data: any) => { subject: string; html: str
 				🔒 If you didn't request this verification, please ignore this email.<br>
 				Your account remains secure and no action is needed.
 			</div>
-		`, "Verify your email to activate your Taraqqi Hub account."),
+		`, "Verify your email to activate your Equalio account."),
 	}),
 
 	// ============================================
@@ -475,7 +475,7 @@ const emailTemplates: Record<string, (data: any) => { subject: string; html: str
 		html: getBaseTemplate(`
 			<h1>You're Verified!</h1>
 			<p class="greeting">Dear ${data.userName || "User"},</p>
-			<p>Great news! Your verification has been approved. You now have full access to all Taraqqi Hub features.</p>
+			<p>Great news! Your verification has been approved. You now have full access to all Equalio features.</p>
 			
 			<div class="success-box">
 				<p>✓ <strong>Account Status:</strong> Verified</p>
@@ -495,8 +495,8 @@ const emailTemplates: Record<string, (data: any) => { subject: string; html: str
 			
 			<a href="${FRONTEND_URL}/dashboard" class="btn">Explore Your Dashboard</a>
 			
-			<p style="margin-top: 24px; color: #64748b; font-size: 14px;">Thank you for trusting Taraqqi Hub. We're committed to providing you with a safe and reliable platform.</p>
-		`, "Your Taraqqi Hub account is now fully verified!"),
+			<p style="margin-top: 24px; color: #64748b; font-size: 14px;">Thank you for trusting Equalio. We're committed to providing you with a safe and reliable platform.</p>
+		`, "Your Equalio account is now fully verified!"),
 	}),
 
 	kyc_rejected: (data) => ({
@@ -531,7 +531,7 @@ const emailTemplates: Record<string, (data: any) => { subject: string; html: str
 	}),
 
 	kyc_resubmission_requested: (data) => ({
-		subject: "Document Resubmission Required - Taraqqi Hub",
+		subject: "Document Resubmission Required - Equalio",
 		html: getBaseTemplate(`
 			<h1>Please Resubmit Your Documents</h1>
 			<p class="greeting">Dear ${data.userName || "User"},</p>
@@ -560,7 +560,7 @@ const emailTemplates: Record<string, (data: any) => { subject: string; html: str
 		html: getBaseTemplate(`
 			<h1>Account Suspension Notice</h1>
 			<p class="greeting">Dear ${data.userName || "User"},</p>
-			<p>We regret to inform you that your Taraqqi Hub account has been suspended.</p>
+			<p>We regret to inform you that your Equalio account has been suspended.</p>
 			
 			<div class="error-box">
 				<p><strong>Reason:</strong> ${data.reason || "Policy violation detected."}</p>
@@ -587,11 +587,11 @@ const emailTemplates: Record<string, (data: any) => { subject: string; html: str
 	}),
 
 	account_deactivated: (data) => ({
-		subject: "Your Taraqqi Hub Account Has Been Deactivated",
+		subject: "Your Equalio Account Has Been Deactivated",
 		html: getBaseTemplate(`
 			<h1>Account Deactivation Notice</h1>
 			<p class="greeting">Dear ${data.userName || "User"},</p>
-			<p>Your Taraqqi Hub account has been deactivated by our administration team.</p>
+			<p>Your Equalio account has been deactivated by our administration team.</p>
 			
 			<div class="warning-box">
 				<p><strong>Reason provided:</strong> ${data.reason || "No reason was specified."}</p>
@@ -643,7 +643,7 @@ const emailTemplates: Record<string, (data: any) => { subject: string; html: str
 				</div>
 			` : data.status === 'Rejected' ? `
 				<div class="info-box">
-					<p>Don't be discouraged! There are many more opportunities waiting for you on Taraqqi Hub.</p>
+					<p>Don't be discouraged! There are many more opportunities waiting for you on Equalio.</p>
 				</div>
 				<a href="${FRONTEND_URL}/jobs" class="btn">Browse More Jobs</a>
 			` : ''}
@@ -689,7 +689,7 @@ const emailTemplates: Record<string, (data: any) => { subject: string; html: str
 	// ============================================
 
 	payment_success: (data) => ({
-		subject: "Payment Confirmed - Taraqqi Hub",
+		subject: "Payment Confirmed - Equalio",
 		html: getBaseTemplate(`
 			<h1>Payment Successful</h1>
 			<p class="greeting">Dear ${data.userName || "User"},</p>
@@ -767,7 +767,7 @@ const emailTemplates: Record<string, (data: any) => { subject: string; html: str
 	// ============================================
 
 	reset_password: (data) => ({
-		subject: "Password Reset Request - Taraqqi Hub",
+		subject: "Password Reset Request - Equalio",
 		html: getBaseTemplate(`
 			<h1>Reset Your Password</h1>
 			<p class="greeting">Dear ${data.userName || "User"},</p>
@@ -790,7 +790,7 @@ const emailTemplates: Record<string, (data: any) => { subject: string; html: str
 	}),
 
 	password_changed: (data) => ({
-		subject: "🔒 Password Changed Successfully - Taraqqi Hub",
+		subject: "🔒 Password Changed Successfully - Equalio",
 		html: getBaseTemplate(`
 			<h1>Password Changed</h1>
 			<p class="greeting">Dear ${data.userName || "User"},</p>
@@ -823,7 +823,7 @@ const emailTemplates: Record<string, (data: any) => { subject: string; html: str
 	// ============================================
 
 	otp_verification: (data) => ({
-		subject: "Your Verification Code - Taraqqi Hub",
+		subject: "Your Verification Code - Equalio",
 		html: getBaseTemplate(`
 			<h1>Verification Code</h1>
 			<p class="greeting">Dear ${data.userName || "User"},</p>
@@ -836,7 +836,7 @@ const emailTemplates: Record<string, (data: any) => { subject: string; html: str
 			</div>
 			
 			<div class="security-notice">
-				🔒 Never share this code with anyone. Taraqqi Hub will never ask for this code via phone or email.
+				🔒 Never share this code with anyone. Equalio will never ask for this code via phone or email.
 			</div>
 		`, `Your verification code is ${data.otp}`),
 	}),

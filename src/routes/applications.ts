@@ -46,6 +46,22 @@ const applySchema = z.object({
 	screeningAnswers: z.record(z.any()).optional(),
 });
 
+// Same as frontend jobCategoryFormConfig – simple-form jobs allow lower profile completion
+const SIMPLE_JOB_CATEGORIES = [
+	"Helpers & Labor",
+	"Construction & Site Work",
+	"Driver & Delivery",
+	"Security & Housekeeping",
+	"Cook, Chef & Waiter",
+	"Manufacturing & Production",
+	"Technician & Mechanic",
+	"Hotel & Restaurant Staff",
+	"Logistics & Supply Chain",
+	"Agriculture & Farming",
+	"Retail & Counter Sales",
+	"Beautician & Spa",
+];
+
 // ============================================
 // Routes
 // ============================================
@@ -175,11 +191,13 @@ router.post(
 					id: jobs.id,
 					title: jobs.title,
 					status: jobs.status,
+					category: jobs.category,
 					employerId: jobs.employerId,
 					maxApplications: jobs.maxApplications,
 					applicationsCount: jobs.applicationsCount,
 					autoCloseOnLimit: jobs.autoCloseOnLimit,
 					isResumeRequired: jobs.isResumeRequired,
+					howToApply: jobs.howToApply,
 				})
 				.from(jobs)
 				.where(
@@ -198,6 +216,14 @@ router.post(
 				throw new HTTPError({
 					httpStatus: StatusCodes.BAD_REQUEST,
 					message: "This job is no longer accepting applications",
+				});
+			}
+
+			const howToApply = job.howToApply ?? "platform";
+			if (howToApply === "direct") {
+				throw new HTTPError({
+					httpStatus: StatusCodes.BAD_REQUEST,
+					message: "This employer prefers direct contact. Please call or WhatsApp them using the contact details on the job page.",
 				});
 			}
 
@@ -232,10 +258,12 @@ router.post(
 			// Recalculate profile completion on the fly to ensure accuracy
 			const status = await updateProfileCompletion(userId);
 			const completion = status.summary.completionPercentage;
-			if (completion < 80) {
+			const isSimpleJob = job.category && SIMPLE_JOB_CATEGORIES.includes(job.category);
+			const minCompletion = isSimpleJob ? 50 : 80;
+			if (completion < minCompletion) {
 				throw new HTTPError({
 					httpStatus: StatusCodes.BAD_REQUEST,
-					message: `Profile must be at least 80% complete to apply (current: ${completion}%)`,
+					message: `Profile must be at least ${minCompletion}% complete to apply (current: ${completion}%)`,
 				});
 			}
 

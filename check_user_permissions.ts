@@ -1,4 +1,5 @@
 
+import "./src/config/loadEnv.ts";
 import { db } from "./src/config/database.ts";
 import { users } from "./src/db/index.ts";
 import { eq } from "drizzle-orm";

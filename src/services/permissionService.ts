@@ -130,20 +130,24 @@ export async function assignRoleToUser(
 	assignedBy?: bigint,
 	tx?: any
 ): Promise<void> {
-	const dbOrTx = tx || db;
-	
-	// Get role by name
-	const [role] = await dbOrTx
+	// IMPORTANT: Always use the main `db` connection to look up the role, NOT the
+	// transaction object. Roles are committed permanent data (seeded once). When
+	// using the postgres-js driver, querying through a transaction object for
+	// already-committed rows can return empty results inside a fresh transaction,
+	// causing "Role not found" errors that silently roll back user creation.
+	const [role] = await db
 		.select({ id: roles.id })
 		.from(roles)
 		.where(eq(roles.name, roleName))
 		.limit(1);
 
 	if (!role) {
-		throw new Error(`Role '${roleName}' not found`);
+		console.error(`[assignRoleToUser] Role '${roleName}' not found in DB. Run: pnpm run db:seed:rbac`);
+		throw new Error(`Role '${roleName}' not found. Please ensure RBAC has been seeded: pnpm run db:seed:rbac`);
 	}
 
-	// Insert user_role (ignore if already exists)
+	// Use transaction for the insert if one is provided (keeps atomicity with user creation)
+	const dbOrTx = tx || db;
 	await dbOrTx
 		.insert(userRoles)
 		.values({
@@ -153,7 +157,7 @@ export async function assignRoleToUser(
 		})
 		.onConflictDoNothing();
 
-	// Clear cache
+	// Clear permission cache for this user
 	clearUserPermissionCache(userId);
 }
 

@@ -8,7 +8,7 @@ import { z } from "zod";
 
 import { db } from "../config/database.ts";
 import { Permissions } from "../config/permissions.ts";
-import { jobs, JobStatuses, JobTypes, employerProfiles, applications, jobViews, savedJobs } from "../db/index.ts";
+import { jobs, JobStatuses, JobTypes, employerProfiles, applications, jobViews, savedJobs, jobseekerProfiles, userProfiles } from "../db/index.ts";
 import authMiddleware from "../middleware/authMiddleware.ts";
 import { requirePermission, attachPermissions } from "../middleware/rbacMiddleware.ts";
 import { requireVerified } from "../middleware/verificationMiddleware.ts";
@@ -36,13 +36,57 @@ const createJobSchema = z.object({
 const updateJobSchema = createJobSchema.partial();
 
 // ============================================
+// Helper: Build job select fields (avoids repetition)
+// ============================================
+const jobSelectFields = (userId: bigint) => ({
+	id: jobs.id,
+	uuid: jobs.uuid,
+	title: jobs.title,
+	slug: jobs.slug,
+	jobType: jobs.jobType,
+	category: jobs.category,
+	city: jobs.city,
+	area: jobs.area,
+	state: jobs.state,
+	locationType: jobs.locationType,
+	salaryMin: jobs.salaryMin,
+	salaryMax: jobs.salaryMax,
+	salaryType: jobs.salaryType,
+	hideSalary: jobs.hideSalary,
+	minExperienceYears: jobs.minExperienceYears,
+	maxExperienceYears: jobs.maxExperienceYears,
+	roleSummary: jobs.roleSummary,
+	skillsRequired: jobs.skillsRequired,
+	status: jobs.status,
+	publishedAt: jobs.publishedAt,
+	isFeatured: jobs.isFeatured,
+	promotionType: jobs.promotionType,
+	isUrgentHighlight: jobs.isUrgentHighlight,
+	expiresAt: jobs.expiresAt,
+	viewsCount: jobs.viewsCount,
+	applicationsCount: jobs.applicationsCount,
+	hasApplied: sql<boolean>`CASE WHEN ${applications.id} IS NOT NULL THEN true ELSE false END`,
+	isSaved: sql<boolean>`CASE WHEN ${savedJobs.id} IS NOT NULL THEN true ELSE false END`,
+});
+
+// ============================================
 // Routes (Require verification for all job operations)
 // ============================================
 
 /**
  * GET /jobs
- * List all active jobs with search/filter — promoted first, then recency (requires verified user)
- * Query params: search, city, jobType, category, minSalary, maxSalary, minExperience, maxExperience, locationType
+ * Smart job listing with automatic preference-based filtering
+ *
+ * Auto-filter logic (3-tier fallback, only when no explicit filters provided):
+ *  Tier 1 — "preferred_match":  user's preferred city + preferred jobType(s)
+ *  Tier 2 — "area_match":       user's city/state (no jobType filter) — if Tier 1 empty
+ *  Tier 3 — "all_jobs":         no location filter — if Tier 2 empty
+ *
+ * When explicit filters are passed via query params, smart auto-filter is skipped
+ * and normal filter logic applies (so the user has full control).
+ *
+ * Query params: search, city, jobType, category, minSalary, maxSalary,
+ *               minExperience, maxExperience, locationType, limit, offset
  */
 router.get(
 	"/",
@@ -65,16 +109,69 @@ router.get(
 			offset: offsetParam,
 		} = req.query;
 
-		const limit = Math.min(parseInt(limitParam as string) || 50, 100);
+		const limit = Math.min(parseInt(limitParam as string) || 20, 100);
 		const offset = parseInt(offsetParam as string) || 0;
 
-		const conditions: any[] = [
+		// Determine if the user passed explicit location/type filters
+		const hasExplicitFilters = !!(city || jobType || search || category || locationType);
+
+		// ── Fetch user profile for smart matching (only when no explicit filters) ──
+		let userCity: string | null = null;
+		let userState: string | null = null;
+		let userJobTypes: string[] = [];
+		let userPreferredLocations: string[] = [];
+		let userSkills: string[] = [];
+
+		if (!hasExplicitFilters) {
+			// Try new userProfiles table first, fall back to legacy jobseekerProfiles
+			const [userProfile] = await db
+				.select({
+					currentCity: userProfiles.currentCity,
+					district: userProfiles.district,
+					state: userProfiles.state,
+				})
+				.from(userProfiles)
+				.where(and(eq(userProfiles.userId, userId), isNull(userProfiles.deletedAt)))
+				.limit(1);
+
+			if (userProfile) {
+				userCity = userProfile.currentCity || null;
+				userState = userProfile.state || null;
+			} else {
+				// Fall back to legacy jobseeker profile
+				const [legacyProfile] = await db
+					.select({
+						city: jobseekerProfiles.city,
+						state: jobseekerProfiles.state,
+						jobTypes: jobseekerProfiles.jobTypes,
+						preferredLocations: jobseekerProfiles.preferredLocations,
+						skills: jobseekerProfiles.skills,
+					})
+					.from(jobseekerProfiles)
+					.where(and(eq(jobseekerProfiles.userId, userId), isNull(jobseekerProfiles.deletedAt)))
+					.limit(1);
+
+				if (legacyProfile) {
+					userCity = legacyProfile.city || null;
+					userState = legacyProfile.state || null;
+					userJobTypes = legacyProfile.jobTypes || [];
+					userPreferredLocations = legacyProfile.preferredLocations || [];
+					userSkills = legacyProfile.skills || [];
+				}
+			}
+		}
+
+		// ── Base conditions (always applied) ──
+		const baseConditions = [
 			eq(jobs.status, JobStatuses.ACTIVE),
 			isNull(jobs.deletedAt),
 		];
 
+		// ── Apply explicit search/filter from query params ──
+		const filterConditions: any[] = [...baseConditions];
+
 		if (search && typeof search === "string") {
-			conditions.push(
+			filterConditions.push(
 				or(
 					like(sql`lower(${jobs.title})`, `%${search.toLowerCase()}%`),
 					like(sql`lower(${jobs.description})`, `%${search.toLowerCase()}%`),
@@ -83,32 +180,32 @@ router.get(
 			);
 		}
 		if (city && typeof city === "string") {
-			conditions.push(like(sql`lower(${jobs.city})`, `%${city.toLowerCase()}%`));
+			filterConditions.push(like(sql`lower(${jobs.city})`, `%${city.toLowerCase()}%`));
 		}
 		if (jobType && typeof jobType === "string") {
-			conditions.push(eq(jobs.jobType, jobType as any));
+			filterConditions.push(eq(jobs.jobType, jobType as any));
 		}
 		if (category && typeof category === "string") {
-			conditions.push(eq(jobs.category, category));
+			filterConditions.push(eq(jobs.category, category));
 		}
 		if (locationType && typeof locationType === "string") {
-			conditions.push(eq(jobs.locationType, locationType as any));
+			filterConditions.push(eq(jobs.locationType, locationType as any));
 		}
 		if (minSalary) {
 			const min = parseFloat(minSalary as string);
-			conditions.push(gte(jobs.salaryMin, min.toString()));
+			filterConditions.push(gte(jobs.salaryMin, min.toString()));
 		}
 		if (maxSalary) {
 			const max = parseFloat(maxSalary as string);
-			conditions.push(lte(jobs.salaryMax, max.toString()));
+			filterConditions.push(lte(jobs.salaryMax, max.toString()));
 		}
 		if (minExperience !== undefined) {
 			const min = parseInt(minExperience as string, 10);
-			conditions.push(gte(jobs.minExperienceYears, min));
+			filterConditions.push(gte(jobs.minExperienceYears, min));
 		}
 		if (maxExperience !== undefined) {
 			const max = parseInt(maxExperience as string, 10);
-			conditions.push(
+			filterConditions.push(
 				or(
 					lte(jobs.maxExperienceYears, max),
 					isNull(jobs.maxExperienceYears)
@@ -116,90 +213,158 @@ router.get(
 			);
 		}
 
-		const result = await db
-			.select({
-				id: jobs.id,
-				uuid: jobs.uuid,
-				title: jobs.title,
-				slug: jobs.slug,
-				jobType: jobs.jobType,
-				category: jobs.category,
-				city: jobs.city,
-				area: jobs.area,
-				state: jobs.state,
-				locationType: jobs.locationType,
-				salaryMin: jobs.salaryMin,
-				salaryMax: jobs.salaryMax,
-				salaryType: jobs.salaryType,
-				hideSalary: jobs.hideSalary,
-				minExperienceYears: jobs.minExperienceYears,
-				maxExperienceYears: jobs.maxExperienceYears,
-				roleSummary: jobs.roleSummary,
-				skillsRequired: jobs.skillsRequired,
-				status: jobs.status,
-				publishedAt: jobs.publishedAt,
-				isFeatured: jobs.isFeatured,
-				promotionType: jobs.promotionType,
-				isUrgentHighlight: jobs.isUrgentHighlight,
-				expiresAt: jobs.expiresAt,
-				viewsCount: jobs.viewsCount,
-				applicationsCount: jobs.applicationsCount,
-				hasApplied: sql<boolean>`CASE WHEN ${applications.id} IS NOT NULL THEN true ELSE false END`,
-				isSaved: sql<boolean>`CASE WHEN ${savedJobs.id} IS NOT NULL THEN true ELSE false END`,
-			})
-			.from(jobs)
-			.leftJoin(
-				applications,
-				and(
-					eq(applications.jobId, jobs.id),
-					eq(applications.jobseekerId, userId),
-					isNull(applications.deletedAt)
+		// ── Helper to join and query ──
+		const queryWithConditions = async (conditions: any[]) => {
+			const result = await db
+				.select(jobSelectFields(userId))
+				.from(jobs)
+				.leftJoin(
+					applications,
+					and(
+						eq(applications.jobId, jobs.id),
+						eq(applications.jobseekerId, userId),
+						isNull(applications.deletedAt)
+					)
 				)
-			)
-			.leftJoin(
-				savedJobs,
-				and(
-					eq(savedJobs.jobId, jobs.id),
-					eq(savedJobs.userId, userId)
+				.leftJoin(
+					savedJobs,
+					and(
+						eq(savedJobs.jobId, jobs.id),
+						eq(savedJobs.userId, userId)
+					)
 				)
-			)
-			.where(and(...conditions))
-			.orderBy(
-				desc(jobs.isFeatured),
-				desc(jobs.isUrgentHighlight),
-				desc(jobs.promotedAt),
-				desc(jobs.publishedAt)
-			)
-			.limit(limit)
-			.offset(offset);
+				.where(and(...conditions))
+				.orderBy(
+					desc(jobs.isFeatured),
+					desc(jobs.isUrgentHighlight),
+					desc(jobs.promotedAt),
+					desc(jobs.publishedAt)
+				)
+				.limit(limit)
+				.offset(offset);
 
-		const [countResult] = await db
-			.select({ count: sql<number>`count(*)::int` })
-			.from(jobs)
-			.where(and(...conditions));
+			const [countResult] = await db
+				.select({ count: sql<number>`count(*)::int` })
+				.from(jobs)
+				.where(and(...conditions));
 
-		return res.status(StatusCodes.OK).json({
-			jobs: result.map((j) => ({
-				...j,
-				hasApplied: j.hasApplied,
-				isSaved: j.isSaved,
-				badges: [
-					j.isFeatured && "Featured",
-					j.isUrgentHighlight && "Urgent",
-					j.promotionType && j.promotionType !== "featured" && j.promotionType !== "highlight"
-						? "Promoted"
-						: null,
-				].filter(Boolean),
-			})),
-			pagination: {
-				total: countResult?.count || 0,
-				limit,
-				offset,
-				hasMore: offset + result.length < (countResult?.count || 0),
-			},
-		});
+			return { result, total: countResult?.count || 0 };
+		};
+
+		// ── Smart matching (only when no explicit filters) ──
+		let matchMode: "preferred_match" | "area_match" | "all_jobs" | "filtered" = "filtered";
+		let finalConditions = filterConditions;
+		let preferenceProfile: {
+			city: string | null;
+			state: string | null;
+			jobTypes: string[];
+		} | null = null;
+
+		if (!hasExplicitFilters) {
+			// Tier 1: Preferred city + preferred job types
+			if (userCity || userJobTypes.length > 0 || userPreferredLocations.length > 0) {
+				const tier1Conditions = [...baseConditions];
+
+				// Location: preferred city OR preferred locations
+				const locationOptions: any[] = [];
+				if (userCity) {
+					locationOptions.push(like(sql`lower(${jobs.city})`, `%${userCity.toLowerCase()}%`));
+				}
+				for (const loc of userPreferredLocations) {
+					locationOptions.push(like(sql`lower(${jobs.city})`, `%${loc.toLowerCase()}%`));
+					locationOptions.push(like(sql`lower(${jobs.state})`, `%${loc.toLowerCase()}%`));
+				}
+				if (locationOptions.length > 0) {
+					tier1Conditions.push(or(...locationOptions)!);
+				}
+
+				// Job type preference
+				if (userJobTypes.length > 0) {
+					tier1Conditions.push(inArray(jobs.jobType, userJobTypes as any[]));
+				}
+
+				const { result, total } = await queryWithConditions(tier1Conditions);
+
+				if (result.length > 0) {
+					matchMode = "preferred_match";
+					preferenceProfile = {
+						city: userCity,
+						state: userState,
+						jobTypes: userJobTypes,
+					};
+					return res.status(StatusCodes.OK).json(buildResponse(result, { total, limit, offset }, matchMode, preferenceProfile));
+				}
+			}
+
+			// Tier 2: Same city/state, no job type restriction
+			if (userCity || userState) {
+				const tier2Conditions = [...baseConditions];
+				const locationOrs: any[] = [];
+				if (userCity) {
+					locationOrs.push(like(sql`lower(${jobs.city})`, `%${userCity.toLowerCase()}%`));
+				}
+				if (userState) {
+					locationOrs.push(like(sql`lower(${jobs.state})`, `%${userState.toLowerCase()}%`));
+				}
+				if (locationOrs.length > 0) {
+					tier2Conditions.push(or(...locationOrs)!);
+				}
+
+				const { result, total } = await queryWithConditions(tier2Conditions);
+
+				if (result.length > 0) {
+					matchMode = "area_match";
+					preferenceProfile = {
+						city: userCity,
+						state: userState,
+						jobTypes: [],
+					};
+					return res.status(StatusCodes.OK).json(buildResponse(result, { total, limit, offset }, matchMode, preferenceProfile));
+				}
+			}
+
+			// Tier 3: Show all active jobs regardless of location
+			matchMode = "all_jobs";
+			finalConditions = [...baseConditions];
+		}
+
+		// ── Final query (filtered or Tier 3 fallback) ──
+		const { result, total } = await queryWithConditions(finalConditions);
+
+		return res.status(StatusCodes.OK).json(buildResponse(result, { total, limit, offset }, matchMode, preferenceProfile));
 	})
 );
+
+// ── Response builder ──
+function buildResponse(
+	result: any[],
+	pagination: { total: number; limit: number; offset: number },
+	matchMode: string,
+	preferenceProfile: any
+) {
+	return {
+		jobs: result.map((j) => ({
+			...j,
+			hasApplied: j.hasApplied,
+			isSaved: j.isSaved,
+			badges: [
+				j.isFeatured && "Featured",
+				j.isUrgentHighlight && "Urgent",
+				j.promotionType && j.promotionType !== "featured" && j.promotionType !== "highlight"
+					? "Promoted"
+					: null,
+			].filter(Boolean),
+		})),
+		pagination: {
+			total: pagination.total,
+			limit: pagination.limit,
+			offset: pagination.offset,
+			hasMore: pagination.offset + result.length < pagination.total,
+		},
+		matchMode,
+		preferenceProfile,
+	};
+}
 
 /**
  * GET /jobs/:id
@@ -278,6 +443,8 @@ router.get(
 				createdAt: jobs.createdAt,
 				employerId: jobs.employerId,
 				isResumeRequired: jobs.isResumeRequired,
+				howToApply: jobs.howToApply,
+				externalApplyUrl: jobs.externalApplyUrl,
 			})
 			.from(jobs)
 			.where(whereCondition)
@@ -291,7 +458,7 @@ router.get(
 			return res.status(StatusCodes.NOT_FOUND).json({ error: "Job not found" });
 		}
 
-		const [company] = await db
+		const [companyRow] = await db
 			.select({
 				companyName: employerProfiles.companyName,
 				brandName: employerProfiles.brandName,
@@ -299,10 +466,32 @@ router.get(
 				industry: employerProfiles.industry,
 				companySize: employerProfiles.companySize,
 				isVerified: employerProfiles.isVerified,
+				contactPhone: employerProfiles.contactPhone,
+				whatsappNumber: employerProfiles.whatsappNumber,
+				showCallToApplicants: employerProfiles.showCallToApplicants,
+				showWhatsAppToApplicants: employerProfiles.showWhatsAppToApplicants,
 			})
 			.from(employerProfiles)
 			.where(eq(employerProfiles.userId, job.employerId))
 			.limit(1);
+
+		// Expose contact when employer has enabled visibility AND job allows direct contact (direct or both)
+		const howToApply = (job as { howToApply?: string }).howToApply ?? "platform";
+		const allowDirectContact = howToApply === "direct" || howToApply === "both";
+		const company = companyRow ? {
+			companyName: companyRow.companyName,
+			brandName: companyRow.brandName,
+			logoUrl: companyRow.logoUrl,
+			industry: companyRow.industry,
+			companySize: companyRow.companySize,
+			isVerified: companyRow.isVerified,
+			...(allowDirectContact && companyRow.showCallToApplicants !== false && companyRow.contactPhone
+				? { contactPhone: companyRow.contactPhone }
+				: {}),
+			...(allowDirectContact && companyRow.showWhatsAppToApplicants !== false && companyRow.whatsappNumber
+				? { whatsappNumber: companyRow.whatsappNumber }
+				: {}),
+		} : null;
 
 		const [hasApplied] = await db
 			.select({ id: applications.id })
@@ -367,7 +556,7 @@ router.get(
 		return res.status(StatusCodes.OK).json({
 			...job,
 			badges,
-			company: company || null,
+			company,
 			hasApplied: !!hasApplied,
 			isSaved: !!isSaved,
 		});

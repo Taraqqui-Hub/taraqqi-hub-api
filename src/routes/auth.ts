@@ -33,24 +33,12 @@ import ResetPasswordService, {
 	ResetPasswordDataSchema,
 } from "../services/auth/resetPassword.ts";
 import { notifyEmailVerification } from "../services/notificationService.ts";
+import {
+	refreshCookieOptions,
+	clearCookieOptions,
+} from "../config/cookies.ts";
 
 const authRouter = Router();
-
-// Refresh token cookie options
-// - Different domains (e.g. frontend one.abc.com, backend one.xyz.com): set AUTH_CROSS_DOMAIN=true → SameSite=None; Secure (HTTPS required)
-// - Same parent domain (e.g. app.example.com + api.example.com): set COOKIE_DOMAIN=.example.com → cookie shared across subdomains
-const refreshCookieOptions = () => {
-	const crossDomain = process.env.AUTH_CROSS_DOMAIN === "true";
-	const domain = process.env.COOKIE_DOMAIN || undefined;
-	return {
-		httpOnly: true,
-		secure: process.env.NODE_ENV === "production" || crossDomain,
-		sameSite: (crossDomain ? "none" : "lax") as "none" | "lax",
-		maxAge: TOKEN_CONFIG.REFRESH_TOKEN_COOKIE_EXPIRY,
-		path: "/",
-		...(domain && !crossDomain && { domain }),
-	};
-};
 
 // ============================================
 // Login
@@ -343,14 +331,7 @@ authRouter.delete(
 			}
 
 			// Clear cookies (must match options used when setting, e.g. for cross-domain)
-			const crossDomain = process.env.AUTH_CROSS_DOMAIN === "true";
-			const clearOpts = {
-				path: "/",
-				sameSite: (crossDomain ? "none" : "lax") as "none" | "lax",
-				httpOnly: true,
-				secure: process.env.NODE_ENV === "production" || crossDomain,
-				...(process.env.COOKIE_DOMAIN && !crossDomain && { domain: process.env.COOKIE_DOMAIN }),
-			};
+			const clearOpts = clearCookieOptions();
 			res.clearCookie("auth", clearOpts);
 			res.clearCookie("refreshToken", clearOpts);
 

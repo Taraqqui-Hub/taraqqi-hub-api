@@ -69,15 +69,18 @@ const employerProfileSchema = z.object({
 		z.undefined()
 	]).optional(),
 	website: z.union([z.string().url(), z.literal(""), z.null(), z.undefined()]).optional(),
-	contactPersonName: z.string().min(2, "Contact person name is required"),
+	contactPersonName: z.string().optional(),
 	contactEmail: z.union([z.string().email(), z.literal(""), z.null(), z.undefined()]).optional(),
 	contactPhone: z.string().optional(),
 	recruiterPhone: z.string().optional(),
 	whatsappNumber: z.string().optional(),
-	address: z.string().optional(),
+	addressLine1: z.string().min(1, "Address Line 1 is required"),
+	addressLine2: z.string().optional(),
+	district: z.string().min(1, "District is required"),
+	country: z.string().optional().default("India"),
 	city: z.string().min(1, "City is required"),
 	state: z.string().min(1, "State is required"),
-	pincode: z.string().optional(),
+	pincode: z.string().min(6, "Invalid PIN code"),
 	description: z.string().max(2000).optional(),
 	benefits: z.array(z.string()).optional(),
 });
@@ -276,12 +279,17 @@ router.post(
 				.limit(1);
 
 			if (!user || user.verificationStatus !== VerificationStatuses.DRAFT) {
+				if (user?.verificationStatus === VerificationStatuses.PAYMENT_VERIFIED) {
+					return res.status(StatusCodes.OK).json({
+						message: "Registration fee already paid.",
+						verificationStatus: VerificationStatuses.PAYMENT_VERIFIED,
+						nextStep: "/employer/register/company",
+					});
+				}
+				
 				throw new HTTPError({
 					httpStatus: StatusCodes.BAD_REQUEST,
-					message:
-						user?.verificationStatus === VerificationStatuses.PAYMENT_VERIFIED
-							? "Registration fee already paid."
-							: "Only employers in draft status can complete payment.",
+					message: "Only employers in draft status can complete payment.",
 				});
 			}
 
@@ -504,11 +512,13 @@ router.post(
 				companyType: (data.companyType || null) as any,
 				companySize: (data.companySize || null) as any,
 				website: data.website || null,
+				contactPersonName: data.contactPersonName || null,
 				contactEmail: data.contactEmail || null,
 				contactPhone: data.contactPhone || null,
 				recruiterPhone: data.recruiterPhone || null,
 				whatsappNumber: data.whatsappNumber || null,
-				address: data.address || null,
+				address: data.addressLine2 ? `${data.addressLine1}, ${data.addressLine2}` : data.addressLine1,
+				district: data.district || null,
 				pincode: data.pincode || null,
 				description: data.description || null,
 				benefits: (data.benefits && data.benefits.length > 0) ? data.benefits : null,
@@ -521,11 +531,12 @@ router.post(
 					.set({
 						companyName: data.companyName,
 						industry: data.industry,
-						contactPersonName: data.contactPersonName,
 						city: data.city,
+						district: cleanData.district,
 						state: data.state,
 						updatedAt: new Date(),
 						// Optional fields
+						contactPersonName: cleanData.contactPersonName,
 						brandName: cleanData.brandName,
 						companyType: cleanData.companyType,
 						companySize: cleanData.companySize,
@@ -547,34 +558,58 @@ router.post(
 				});
 			}
 
-			// Create new profile
-			const [profile] = await db
-				.insert(employerProfiles)
-				.values({
-					userId,
-					companyName: data.companyName,
-					industry: data.industry,
-					contactPersonName: data.contactPersonName,
-					city: data.city,
-					state: data.state,
-					country: "India",
-					// Optional fields
-					brandName: cleanData.brandName,
-					companyType: cleanData.companyType,
-					companySize: cleanData.companySize,
-					website: cleanData.website,
-					contactEmail: cleanData.contactEmail,
-					contactPhone: cleanData.contactPhone,
-					recruiterPhone: cleanData.recruiterPhone,
-					whatsappNumber: cleanData.whatsappNumber,
-					address: cleanData.address,
-					pincode: cleanData.pincode,
-					description: cleanData.description,
-					benefits: cleanData.benefits,
-				})
-				.returning({ id: employerProfiles.id });
+			// Create new profile (explicit transaction so insert is committed before we respond)
+			let profileId: bigint;
+			await db.transaction(async (tx) => {
+				const [profile] = await tx
+					.insert(employerProfiles)
+					.values({
+						userId,
+						companyName: data.companyName,
+						industry: data.industry,
+						contactPersonName: cleanData.contactPersonName,
+						city: data.city,
+						district: cleanData.district,
+						state: data.state,
+						country: data.country || "India",
+						// Optional fields
+						brandName: cleanData.brandName,
+						companyType: cleanData.companyType,
+						companySize: cleanData.companySize,
+						website: cleanData.website,
+						contactEmail: cleanData.contactEmail,
+						contactPhone: cleanData.contactPhone,
+						recruiterPhone: cleanData.recruiterPhone,
+						whatsappNumber: cleanData.whatsappNumber,
+						address: cleanData.address,
+						pincode: cleanData.pincode,
+						description: cleanData.description,
+						benefits: cleanData.benefits,
+					})
+					.returning({ id: employerProfiles.id });
+				if (!profile) {
+					throw new HTTPError({
+						httpStatus: StatusCodes.INTERNAL_SERVER_ERROR,
+						message: "Failed to create employer profile",
+					});
+				}
+				profileId = profile.id;
+			});
 
-			await auditCreate("employer_profile", profile.id, { companyName: data.companyName }, {
+			// Verify row exists (ensures we never return success if DB didn't persist)
+			const [verify] = await db
+				.select({ id: employerProfiles.id })
+				.from(employerProfiles)
+				.where(eq(employerProfiles.userId, userId))
+				.limit(1);
+			if (!verify) {
+				throw new HTTPError({
+					httpStatus: StatusCodes.INTERNAL_SERVER_ERROR,
+					message: "Employer profile was not saved. Please try again.",
+				});
+			}
+
+			await auditCreate("employer_profile", profileId, { companyName: data.companyName }, {
 				userId,
 				ipAddress: req.clientIp,
 				userAgent: req.clientUserAgent,

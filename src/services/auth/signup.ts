@@ -100,12 +100,21 @@ class SignupService extends Service<SignupData, SignupResult> {
 				expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
 			});
 
-			// Assign default role based on user type
+			// Assign default role based on user type.
+			// NOTE: assignRoleToUser uses the main `db` connection (not `tx`) to look up
+			// the role, then uses `tx` only for the insert. This is intentional — see
+			// permissionService.ts for the full explanation.
 			const roleName =
 				this.data.userType === "employer"
 					? RoleNames.EMPLOYER
 					: RoleNames.INDIVIDUAL;
-			await assignRoleToUser(newUser.id, roleName, undefined, tx);
+			try {
+				await assignRoleToUser(newUser.id, roleName, undefined, tx);
+				console.log(`[Signup] Assigned role '${roleName}' to user ${newUser.id} (${this.data.email})`);
+			} catch (roleErr) {
+				console.error(`[Signup] CRITICAL: Failed to assign role '${roleName}' to user ${newUser.id} (${this.data.email}):`, roleErr);
+				throw roleErr; // Re-throw so the transaction rolls back and registration fails cleanly
+			}
 
 			return newUser;
 		});

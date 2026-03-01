@@ -24,7 +24,7 @@ const STATUS_MESSAGES: Record<string, string> = {
 	[VerificationStatuses.REJECTED]:
 		"Your verification was not approved. Please check the reason and resubmit your documents.",
 	[VerificationStatuses.SUSPENDED]:
-		"Your account has been suspended. Please contact support at support@taraqqihub.com",
+		"Your account has been suspended. Please contact support at support@equalio.com",
 };
 
 // Redirect paths for each status

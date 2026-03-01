@@ -148,6 +148,10 @@ export const jobs = pgTable(
 		autoCloseOnLimit: boolean("auto_close_on_limit").notNull().default(false),
 		isResumeRequired: boolean("is_resume_required").notNull().default(false),
 
+		// How employer wants to receive responses: platform (apply here), direct (call/WhatsApp only), both, external (third-party URL)
+		howToApply: text("how_to_apply").default("platform").notNull(), // "platform" | "direct" | "both" | "external"
+		externalApplyUrl: text("external_apply_url"), // Required when howToApply === "external"
+
 		// Stats
 		viewsCount: integer("views_count").notNull().default(0),
 		applicationsCount: integer("applications_count").notNull().default(0),

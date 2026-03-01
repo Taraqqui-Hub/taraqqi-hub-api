@@ -24,6 +24,7 @@ import { assignRoleToUser } from "../services/permissionService.ts";
 import { RoleNames } from "../config/permissions.ts";
 import { auditLogin } from "../services/auditService.ts";
 import { v4 as uuidv4 } from "uuid";
+import { refreshCookieOptions } from "../config/cookies.ts";
 
 const otpRouter = Router();
 
@@ -225,14 +226,8 @@ otpRouter.post(
 			// Store refresh token in database
 			// (You may want to use the existing refreshTokens table)
 
-			// Set refresh token as httpOnly cookie
-			res.cookie("refreshToken", refreshToken, {
-				httpOnly: true,
-				secure: process.env.NODE_ENV === "production",
-				sameSite: "strict",
-				maxAge: TOKEN_CONFIG.REFRESH_TOKEN_COOKIE_EXPIRY,
-				path: "/",
-			});
+			// Set refresh token as httpOnly cookie (supports cross-domain when AUTH_CROSS_DOMAIN=true)
+			res.cookie("refreshToken", refreshToken, refreshCookieOptions());
 
 			// Audit log
 			await auditLogin(user.id, user.email || user.phone || "Unknown", {
@@ -329,14 +324,8 @@ otpRouter.post(
 				createRefreshToken(tokenData, refreshTokenId),
 			]);
 
-			// Set refresh token as httpOnly cookie
-			res.cookie("refreshToken", refreshToken, {
-				httpOnly: true,
-				secure: process.env.NODE_ENV === "production",
-				sameSite: "strict",
-				maxAge: TOKEN_CONFIG.REFRESH_TOKEN_COOKIE_EXPIRY,
-				path: "/",
-			});
+			// Set refresh token as httpOnly cookie (supports cross-domain when AUTH_CROSS_DOMAIN=true)
+			res.cookie("refreshToken", refreshToken, refreshCookieOptions());
 
 			return res.status(StatusCodes.CREATED).json({
 				message: "Registration successful",

@@ -75,7 +75,8 @@ const createJobSchema = z.object({
 	addressLine2: z.string().optional(),
 	salaryMin: z.number().positive().optional(),
 	salaryMax: z.number().positive().optional(),
-	salaryType: z.enum(["monthly", "yearly"]).optional(),
+	// Support multiple payment frequencies, especially for labor jobs
+	salaryType: z.enum(["daily", "weekly", "monthly", "quarterly", "yearly"]).optional(),
 	hideSalary: z.boolean().default(false),
 	isSalaryNegotiable: z.boolean().default(false),
 	benefits: z.array(z.string()).optional(),
@@ -89,9 +90,14 @@ const createJobSchema = z.object({
 	autoCloseOnLimit: z.boolean().default(false),
 	isResumeRequired: z.boolean().default(false),
 	status: z.enum(["draft", "active"]).default("draft"),
+	howToApply: z.enum(["platform", "direct", "both", "external"]).default("platform"),
+	externalApplyUrl: z.string().url().optional().or(z.literal("")),
 });
 
-const updateJobSchema = createJobSchema.partial();
+// For PATCH, allow status transitions: draft, active, paused, closed (expired is system-only)
+const updateJobSchema = createJobSchema.partial().extend({
+	status: z.enum(["draft", "active", "paused", "closed"]).optional(),
+});
 
 const updateApplicationStatusSchema = z.object({
 	status: z.enum([
@@ -264,9 +270,7 @@ router.get(
 				createdAt: jobs.createdAt,
 			})
 			.from(jobs)
-			.where(
-				and(eq(jobs.employerId, userId), isNull(jobs.deletedAt))
-			)
+			.where(eq(jobs.employerId, userId))
 			.orderBy(desc(jobs.createdAt));
 
 		return res.status(StatusCodes.OK).json({ jobs: result });
@@ -368,6 +372,47 @@ router.post(
 				? new Date(now.getTime() + listingDays * 24 * 60 * 60 * 1000)
 				: null;
 
+			// When employer wants direct contact only, they must have at least one contact visible to applicants
+			const howToApply = data.howToApply ?? "platform";
+			if (howToApply === "direct") {
+				const [empProfile] = await db
+					.select({
+						contactPhone: employerProfiles.contactPhone,
+						whatsappNumber: employerProfiles.whatsappNumber,
+						showCallToApplicants: employerProfiles.showCallToApplicants,
+						showWhatsAppToApplicants: employerProfiles.showWhatsAppToApplicants,
+					})
+					.from(employerProfiles)
+					.where(eq(employerProfiles.userId, userId))
+					.limit(1);
+				const hasVisibleContact =
+					(empProfile?.showCallToApplicants !== false && empProfile?.contactPhone) ||
+					(empProfile?.showWhatsAppToApplicants !== false && empProfile?.whatsappNumber);
+				if (!hasVisibleContact) {
+					throw new HTTPError({
+						httpStatus: StatusCodes.BAD_REQUEST,
+						message: "Add a phone or WhatsApp number in your company profile and allow applicants to see it, so candidates can contact you directly.",
+					});
+				}
+			}
+			if (howToApply === "external") {
+				const url = (data.externalApplyUrl || "").trim();
+				if (!url) {
+					throw new HTTPError({
+						httpStatus: StatusCodes.BAD_REQUEST,
+						message: "Application URL is required when using third-party / external apply.",
+					});
+				}
+				try {
+					new URL(url);
+				} catch {
+					throw new HTTPError({
+						httpStatus: StatusCodes.BAD_REQUEST,
+						message: "Please enter a valid application URL.",
+					});
+				}
+			}
+
 			// Create job (base listing)
 			const [job] = await db
 				.insert(jobs)
@@ -412,6 +457,8 @@ router.post(
 					autoCloseOnLimit: data.autoCloseOnLimit ?? false,
 					isResumeRequired: data.isResumeRequired ?? false,
 					status: data.status as any,
+					howToApply: howToApply as any,
+					externalApplyUrl: howToApply === "external" && data.externalApplyUrl ? (data.externalApplyUrl as string).trim() : null,
 					listingDurationDays: listingDays,
 					expiresAt,
 					publishedAt: data.status === "active" ? now : null,
@@ -490,6 +537,46 @@ router.patch(
 				}
 			}
 
+			// When switching to direct contact only, employer must have visible contact
+			if (data.howToApply === "direct") {
+				const [empProfile] = await db
+					.select({
+						contactPhone: employerProfiles.contactPhone,
+						whatsappNumber: employerProfiles.whatsappNumber,
+						showCallToApplicants: employerProfiles.showCallToApplicants,
+						showWhatsAppToApplicants: employerProfiles.showWhatsAppToApplicants,
+					})
+					.from(employerProfiles)
+					.where(eq(employerProfiles.userId, userId))
+					.limit(1);
+				const hasVisibleContact =
+					(empProfile?.showCallToApplicants !== false && empProfile?.contactPhone) ||
+					(empProfile?.showWhatsAppToApplicants !== false && empProfile?.whatsappNumber);
+				if (!hasVisibleContact) {
+					throw new HTTPError({
+						httpStatus: StatusCodes.BAD_REQUEST,
+						message: "Add a phone or WhatsApp number in your company profile and allow applicants to see it, so candidates can contact you directly.",
+					});
+				}
+			}
+			if (data.howToApply === "external") {
+				const url = (data.externalApplyUrl ?? existing.externalApplyUrl ?? "").toString().trim();
+				if (!url) {
+					throw new HTTPError({
+						httpStatus: StatusCodes.BAD_REQUEST,
+						message: "Application URL is required when using third-party / external apply.",
+					});
+				}
+				try {
+					new URL(url);
+				} catch {
+					throw new HTTPError({
+						httpStatus: StatusCodes.BAD_REQUEST,
+						message: "Please enter a valid application URL.",
+					});
+				}
+			}
+
 			// Build update object
 			const updateData: Record<string, any> = { updatedAt: new Date() };
 
@@ -532,6 +619,13 @@ router.patch(
 			if (data.maxApplications !== undefined) updateData.maxApplications = data.maxApplications;
 			if (data.autoCloseOnLimit !== undefined) updateData.autoCloseOnLimit = data.autoCloseOnLimit;
 			if (data.isResumeRequired !== undefined) updateData.isResumeRequired = data.isResumeRequired;
+			if (data.howToApply !== undefined) {
+				updateData.howToApply = data.howToApply;
+				if (data.howToApply !== "external") updateData.externalApplyUrl = null;
+			}
+			if (data.externalApplyUrl !== undefined && (data.howToApply === "external" || existing.howToApply === "external")) {
+				updateData.externalApplyUrl = data.externalApplyUrl ? String(data.externalApplyUrl).trim() : null;
+			}
 			if (data.status) {
 				updateData.status = data.status;
 				if (data.status === "active" && !existing.publishedAt) {
@@ -789,22 +883,29 @@ router.get(
 				internalNotes: applications.internalNotes,
 				appliedAt: applications.appliedAt,
 				viewedAt: applications.viewedAt,
-				// Jobseeker info
+				// Fallback display name from users table
+				displayName: users.name,
+				// Jobseeker profile info
 				profile: {
 					id: jobseekerProfiles.id,
 					firstName: jobseekerProfiles.firstName,
 					lastName: jobseekerProfiles.lastName,
 					headline: jobseekerProfiles.headline,
 					city: jobseekerProfiles.city,
+					state: jobseekerProfiles.state,
 					experienceYears: jobseekerProfiles.experienceYears,
 					skills: jobseekerProfiles.skills,
 					profilePhotoUrl: jobseekerProfiles.profilePhotoUrl,
 					resumeUrl: jobseekerProfiles.resumeUrl,
+					profileCompletion: jobseekerProfiles.profileCompletion,
+					summary: jobseekerProfiles.summary,
+					gender: jobseekerProfiles.gender,
 				},
-				// User contact info
+				// User contact info (for Call/WhatsApp buttons)
 				contact: {
 					email: users.email,
 					phone: users.phone,
+					whatsappNumber: users.whatsappNumber,
 				},
 			})
 			.from(applications)
