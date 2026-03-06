@@ -70,6 +70,165 @@ const jobSelectFields = (userId: bigint) => ({
 });
 
 // ============================================
+// Public routes (no auth)
+// ============================================
+
+/**
+ * GET /jobs/landing
+ * Public endpoint for landing page — returns jobs by location (city/state).
+ * No auth required. Used to show featured jobs to anonymous visitors.
+ *
+ * Query params: city, state, limit (default 6, max 12)
+ */
+router.get(
+	"/landing",
+	expressAsyncHandler(async (req, res) => {
+		const { city, state, limit: limitParam } = req.query;
+		const limit = Math.min(parseInt(limitParam as string) || 6, 12);
+
+		const baseConditions = [
+			eq(jobs.status, JobStatuses.ACTIVE),
+			isNull(jobs.deletedAt),
+		];
+
+		const selectLandingFields = {
+			id: jobs.id,
+			uuid: jobs.uuid,
+			title: jobs.title,
+			slug: jobs.slug,
+			jobType: jobs.jobType,
+			category: jobs.category,
+			city: jobs.city,
+			area: jobs.area,
+			state: jobs.state,
+			locationType: jobs.locationType,
+			salaryMin: jobs.salaryMin,
+			salaryMax: jobs.salaryMax,
+			salaryType: jobs.salaryType,
+			hideSalary: jobs.hideSalary,
+			minExperienceYears: jobs.minExperienceYears,
+			maxExperienceYears: jobs.maxExperienceYears,
+			roleSummary: jobs.roleSummary,
+			skillsRequired: jobs.skillsRequired,
+			publishedAt: jobs.publishedAt,
+			isFeatured: jobs.isFeatured,
+			isUrgentHighlight: jobs.isUrgentHighlight,
+		};
+
+		let jobsList;
+
+		const cityStr = typeof city === "string" ? city.toLowerCase() : "";
+		const stateStr = typeof state === "string" ? state.toLowerCase() : "";
+
+		// Tier 1: exact area (city match)
+		if (cityStr) {
+			const cityConditions: any[] = [
+				...baseConditions,
+				like(sql`lower(${jobs.city})`, `%${cityStr}%`),
+			];
+
+			const cityResult = await db
+				.select(selectLandingFields)
+				.from(jobs)
+				.where(and(...cityConditions))
+				.orderBy(
+					desc(jobs.isFeatured),
+					desc(jobs.isUrgentHighlight),
+					desc(jobs.publishedAt)
+				)
+				.limit(limit);
+
+			if (cityResult.length > 0) {
+				jobsList = cityResult;
+			}
+		}
+
+		// Tier 2: other areas in same state
+		if (!jobsList && stateStr) {
+			const stateConditions: any[] = [
+				...baseConditions,
+				like(sql`lower(${jobs.state})`, `%${stateStr}%`),
+			];
+
+			const stateResult = await db
+				.select(selectLandingFields)
+				.from(jobs)
+				.where(and(...stateConditions))
+				.orderBy(
+					desc(jobs.isFeatured),
+					desc(jobs.isUrgentHighlight),
+					desc(jobs.publishedAt)
+				)
+				.limit(limit);
+
+			if (stateResult.length > 0) {
+				jobsList = stateResult;
+			}
+		}
+
+		// Tier 3: all active jobs (whatever we normally show)
+		if (!jobsList) {
+			const fallback = await db
+				.select(selectLandingFields)
+				.from(jobs)
+				.where(and(...baseConditions))
+				.orderBy(
+					desc(jobs.isFeatured),
+					desc(jobs.isUrgentHighlight),
+					desc(jobs.publishedAt)
+				)
+				.limit(limit);
+			jobsList = fallback;
+		}
+
+		const companyIds = [...new Set(jobsList.map((j: any) => j.employerId))].filter(Boolean);
+		// Jobs don't have employerId in our select - we need to join employerProfiles for company name
+		// For landing we can get company name from employer - let me check the schema
+		// Actually we didn't select employerId. Let me add it for the company name lookup.
+		// Looking at the select - we don't have employerId. Let me add it.
+		// Actually for a minimal landing card we might just show job title, location, salary, experience.
+		// The current FEATURED_JOBS had company - we get that from employerProfiles. Let me add a join.
+
+		// Fetch company names for display
+		const jobsWithCompany = await Promise.all(
+			jobsList.map(async (j: any) => {
+				const [jobWithEmployer] = await db
+					.select({
+						employerId: jobs.employerId,
+					})
+					.from(jobs)
+					.where(eq(jobs.id, j.id))
+					.limit(1);
+				let companyName: string | null = null;
+				if (jobWithEmployer?.employerId) {
+					const [ep] = await db
+						.select({ companyName: employerProfiles.companyName, brandName: employerProfiles.brandName })
+						.from(employerProfiles)
+						.where(eq(employerProfiles.userId, jobWithEmployer.employerId))
+						.limit(1);
+					companyName = ep?.brandName || ep?.companyName || null;
+				}
+				return {
+					...j,
+					company: companyName,
+				};
+			})
+		);
+
+		return res.status(StatusCodes.OK).json({
+			jobs: jobsWithCompany.map((j: any) => ({
+				...j,
+				company: j.company,
+				badges: [
+					j.isFeatured && "Featured",
+					j.isUrgentHighlight && "Urgent",
+				].filter(Boolean),
+			})),
+		});
+	})
+);
+
+// ============================================
 // Routes (Require verification for all job operations)
 // ============================================
 
@@ -365,6 +524,84 @@ function buildResponse(
 		preferenceProfile,
 	};
 }
+
+/**
+ * GET /jobs/landing
+ * Public endpoint for landing page — no auth required.
+ * Returns jobs filtered by user's location (city/state from query params).
+ * Query params: city, state, limit (default 6)
+ */
+router.get(
+	"/landing",
+	expressAsyncHandler(async (req, res) => {
+		const { city, state, limit: limitParam } = req.query;
+		const limit = Math.min(parseInt(limitParam as string) || 6, 20);
+
+		const baseConditions = [
+			eq(jobs.status, JobStatuses.ACTIVE),
+			isNull(jobs.deletedAt),
+		];
+
+		const conditions: any[] = [...baseConditions];
+
+		// Filter by location when city or state provided
+		if (city && typeof city === "string") {
+			conditions.push(like(sql`lower(${jobs.city})`, `%${city.toLowerCase()}%`));
+		}
+		if (state && typeof state === "string") {
+			conditions.push(like(sql`lower(${jobs.state})`, `%${state.toLowerCase()}%`));
+		}
+
+		const result = await db
+			.select({
+				id: jobs.id,
+				uuid: jobs.uuid,
+				title: jobs.title,
+				slug: jobs.slug,
+				jobType: jobs.jobType,
+				category: jobs.category,
+				city: jobs.city,
+				area: jobs.area,
+				state: jobs.state,
+				locationType: jobs.locationType,
+				salaryMin: jobs.salaryMin,
+				salaryMax: jobs.salaryMax,
+				salaryType: jobs.salaryType,
+				hideSalary: jobs.hideSalary,
+				minExperienceYears: jobs.minExperienceYears,
+				maxExperienceYears: jobs.maxExperienceYears,
+				roleSummary: jobs.roleSummary,
+				skillsRequired: jobs.skillsRequired,
+				publishedAt: jobs.publishedAt,
+				isFeatured: jobs.isFeatured,
+				isUrgentHighlight: jobs.isUrgentHighlight,
+				expiresAt: jobs.expiresAt,
+				companyName: employerProfiles.companyName,
+				brandName: employerProfiles.brandName,
+			})
+			.from(jobs)
+			.leftJoin(employerProfiles, eq(employerProfiles.userId, jobs.employerId))
+			.where(and(...conditions))
+			.orderBy(
+				desc(jobs.isFeatured),
+				desc(jobs.isUrgentHighlight),
+				desc(jobs.promotedAt),
+				desc(jobs.publishedAt)
+			)
+			.limit(limit);
+
+		const jobsList = result.map((j) => ({
+			...j,
+			company: (j as any).brandName || (j as any).companyName || null,
+			badges: [
+				j.isFeatured && "Featured",
+				j.isUrgentHighlight && "Urgent",
+			].filter(Boolean),
+		}));
+
+		return res.status(StatusCodes.OK).json({ jobs: jobsList });
+	})
+);
 
 /**
  * GET /jobs/:id
