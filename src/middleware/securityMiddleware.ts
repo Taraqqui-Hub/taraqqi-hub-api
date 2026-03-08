@@ -53,6 +53,20 @@ export const uploadRateLimiter = rateLimit({
 	legacyHeaders: false,
 });
 
+// Public landing featured jobs — strict limit to prevent abuse (no auth required)
+export const landingPublicRateLimiter = rateLimit({
+	windowMs: 60 * 1000, // 1 minute
+	max: 30, // 30 requests per minute per IP
+	message: {
+		error: "Too many requests",
+		code: "RATE_LIMIT_EXCEEDED",
+		retryAfter: 60,
+	},
+	standardHeaders: true,
+	legacyHeaders: false,
+	keyGenerator: (req) => (req as any).clientIp || req.ip || "unknown",
+});
+
 // ============================================
 // Security Headers (Helmet)
 // ============================================

@@ -9,7 +9,7 @@ import requestContext from "../middleware/requestContext.ts";
 
 const envOrigins = (process.env.CORS_ALLOWED_ORIGINS || "")
 	.split(",")
-	.map((o) => o.trim())
+	.map((o) => o.trim().replace(/\/$/, ""))
 	.filter(Boolean);
 
 const CORS_ALLOWED_DOMAINS = envOrigins.length
@@ -57,8 +57,11 @@ export default class Server {
 					if (!requestOrigin) {
 						return callback(null, true);
 					}
+					const originNormalized = requestOrigin.replace(/\/$/, "");
 					if (process.env.ENV === "prod") {
-						const isAllowed = CORS_ALLOWED_DOMAINS.includes(requestOrigin);
+						const isAllowed =
+							CORS_ALLOWED_DOMAINS.includes(requestOrigin) ||
+							CORS_ALLOWED_DOMAINS.includes(originNormalized);
 						callback(null, isAllowed);
 					} else {
 						callback(null, true);

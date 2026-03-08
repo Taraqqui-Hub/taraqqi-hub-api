@@ -1,13 +1,25 @@
 /**
  * Shared cookie options for auth (login, signup, refresh, logout) and OTP routes.
  * Use AUTH_CROSS_DOMAIN=true when frontend and API are on different domains
- * (e.g. equario.x and api.hyperlink.xyz) so cookies use SameSite=None; Secure.
+ * (e.g. app.example.com and api.example.com) so cookies use SameSite=None; Secure.
+ * When cross-domain: do NOT set COOKIE_DOMAIN (cookie is bound to API host only).
  */
 
 import { TOKEN_CONFIG } from "../utils/jwt.ts";
 
-const isCrossDomain = () => process.env.AUTH_CROSS_DOMAIN === "true";
-const cookieDomain = () => process.env.COOKIE_DOMAIN || undefined;
+const isCrossDomain = () =>
+	process.env.AUTH_CROSS_DOMAIN === "true" ||
+	process.env.AUTH_CROSS_DOMAIN === "1";
+
+/** Production-like environment so we set Secure on cookies when needed */
+const isProductionLike = () =>
+	process.env.NODE_ENV === "production" || process.env.ENV === "prod";
+
+const cookieDomain = () => {
+	// Cross-domain: never set domain so cookie is host-only for the API origin
+	if (isCrossDomain()) return undefined;
+	return process.env.COOKIE_DOMAIN || undefined;
+};
 
 export type RefreshCookieOptions = {
 	httpOnly: boolean;
@@ -28,11 +40,11 @@ export function refreshCookieOptions(): RefreshCookieOptions {
 	const domain = cookieDomain();
 	return {
 		httpOnly: true,
-		secure: process.env.NODE_ENV === "production" || crossDomain,
+		secure: isProductionLike() || crossDomain,
 		sameSite: crossDomain ? "none" : "lax",
 		maxAge: TOKEN_CONFIG.REFRESH_TOKEN_COOKIE_EXPIRY,
 		path: "/",
-		...(domain && !crossDomain ? { domain } : {}),
+		...(domain ? { domain } : {}),
 	};
 }
 
@@ -54,7 +66,7 @@ export function clearCookieOptions(): ClearCookieOptions {
 		path: "/",
 		sameSite: crossDomain ? "none" : "lax",
 		httpOnly: true,
-		secure: process.env.NODE_ENV === "production" || crossDomain,
-		...(domain && !crossDomain ? { domain } : {}),
+		secure: isProductionLike() || crossDomain,
+		...(domain ? { domain } : {}),
 	};
 }
