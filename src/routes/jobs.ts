@@ -133,7 +133,7 @@ router.get(
 			desc(jobs.publishedAt),
 		];
 
-		let jobsList: any[];
+		let jobsList: any[] = [];
 
 		// Tier 1: by city (location preference from localStorage or IP)
 		if (cityStr) {
@@ -590,7 +590,7 @@ router.get(
 				.orderBy(...orderBy)
 				.limit(limit);
 
-		let result: any[];
+		let result: any[] = [];
 
 		// Tier 1: preferred city + job types
 		if (userCity || userJobTypes.length > 0 || userPreferredLocations.length > 0) {
